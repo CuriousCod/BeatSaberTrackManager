@@ -3,17 +3,29 @@ from pathlib import Path
 import youtube_dl
 import json
 import PySimpleGUI as sg
+import PIL
+from PIL import Image
+import urllib
 
 # TODO Maybe implement best of three results ytsearch3
 # TODO Make sure the app doesn't download 10 hour videos!
-# TODO Generate video.json
-# TODO Enable youtubedl
+# DONE Generate video.json
+# DONE Enable youtubedl
+# TODO Make file paths dynamic
+# TODO Set maximum character limit for description
+# TODO Make sure that .mp4 is the only output format
+# TODO A lot of code cleaning
+# TODO Implement a decent GUI
+# TODO Standardize folder format for searches '0000 (trackname - maker)'
+# TODO Exception handling: no folder chosen, no video found
+
+# Start by reading the BS custom track folder and print out all folders that don't have video.json
 
 yes_video = []
 no_video = []
 x = 0
 
-tracks = os.listdir('F:\Games\Beat Saber 1.8.0\Beat Saber_Data\CustomLevels')
+tracks = os.listdir('F:\Games\Beat Saber 1.8.0\Beat Saber_Data\CustomLevels')  # Make this dynamic
 for i in tracks:
     print(i)
     my_file = Path('F:\Games\Beat Saber 1.8.0\Beat Saber_Data\CustomLevels\\' + i + '\\video.json')
@@ -43,58 +55,93 @@ for i in lines:
     name_end = i.find('-') - 1
     print(i[name_start:name_end])
 
+# Create a simple GUI to display all the folders without video.json
+
 sg.theme('Dark Brown 1')
 
-layout = [[sg.Listbox(values=lines, size=(50, 30)), sg.Button('Submit')]]
+col1 = [
+    [sg.Text('', key='video_name', size=(40,4))],
+    [sg.Text('', key='duration', size=(40,1))]
+]
 
-window = sg.Window('Table Simulation', layout, font='Courier 12', size=(600, 600))
-event, values = window.read()
+layout = [[sg.Listbox(values=lines, size=(50, 30)), sg.Button('Submit'), sg.Button('Download')],
+          [sg.Image(r'', key='thumbnail'), sg.Column(col1)]]
+
+window = sg.Window('Table Simulation', layout, font='Courier 12', size=(700, 800))
+
+while True:
+    event, values = window.read()
+    if event == sg.WIN_CLOSED or event == 'Exit':  # if user closes window or clicks cancel
+        break
+
+    # When submit is pressed run youtubedl script with the chosen folder
+
+    ydl = youtube_dl.YoutubeDL({'outtmpl': '%(id)s.%(ext)s'})
+
+    search = str(values[0])  # The chosen folder
+    search = search[search.find('(') + 1:search.find('-') - 1]  # Cut the excess text from the folder name, based on ( and - symbols
+    print(search)
+
+    info = ydl.extract_info('ytsearch:' + search, download=False, ie_key='YoutubeSearch')
+    info = info['entries'][0]  # TODO Turn this into if later on
+    print(info)  # Print out the extracted video information for debug purposes
+    print(info['title'])
+    print(info['uploader'])
+    #print(info['description'])
+    print(info['duration'])  # Printed in seconds, convert this
+    print(info['webpage_url'])
+    print(info['thumbnail'])
+
+    # Convert duration into mm:ss
+    # Youtube seems to be off by a second from youtubedl, good enough I guess
+    duration = str(int(info['duration'] / 60))
+    duration = duration + ':' + str(info['duration'] % 60)
+
+    urllib.request.urlretrieve(info['thumbnail'], 'thumbnail.png')
+    img = PIL.Image.open('thumbnail.png')
+    img = img.resize((360, 200))
+    img.save('thumbnail.png')
+    window['thumbnail'].update('thumbnail.png')
+    window['video_name'].update(info['title'])
+    window['duration'].update(duration)
+    window.Refresh()
+
+    #  build video.json, "loop":false fixed in a hacky way :D
+    data_set = {'activeVideo':0,'videos':[{'title':info['title'],'author':info['uploader'],'description':info['description'],
+                'duration':duration,'URL':info['webpage_url'],'thumbnailURL':info['thumbnail'],'loop':'f' + 'alse','offset': 0,'videopath':info['title'] + '.mp4'}],'Count':1}
+
+    # video.json debug
+    print(json.dumps(data_set, ensure_ascii=False))
+
+    #  save video.json, encoding is utf8 otherwise there will be problems with MVP
+    with open('video.json', 'w', encoding='utf8') as outfile:
+        json.dump(data_set, outfile, ensure_ascii=False)
+
+    #  Download the video, when download button is pressed
+    if event == 'Download':
+        download = info['webpage_url']
+        print(download)
+        youtube_dl.YoutubeDL({'outtmpl': '%(title)s.%(ext)s'}).download([download]) #Outputs title.mp4
 
 window.close()  # Don't forget to close your window!
 
-
-
-ydl = youtube_dl.YoutubeDL({'outtmpl': '%(id)s.%(ext)s'})  # Dunno what the bracket stuff does
-
-search = str(values[0])
-search = search[search.find('(') + 1:search.find('-') - 1]
-print(search)
-
-info = ydl.extract_info('ytsearch:' + search, download=False, ie_key='YoutubeSearch')
-info = info['entries'][0]  # TODO Turn this into if later on
-print(info)
-print(info['title'])
-print(info['uploader'])
-#print(info['description'])
-print(info['duration'])  # Printed in seconds, convert this
-print(info['webpage_url'])
-print(info['thumbnail'])
-# Also these:
-# Loop
-# offset
-# videopath
-duration = str(int(info['duration'] / 60))
-duration = duration + ':' + str(info['duration'] % 60)
-
-#Youtube seems to be off by a second from youtubedl, good enough I guess
-
-
-#  videopath is currently null, False is capitalized,
-data_set = {'title': info['title'], 'author': info['uploader'], 'description': info['description'],
-            'duration': duration, 'URL': info['webpage_url'], 'thumbnailURL': info['thumbnail'], 'loop':False, 'offset':0, 'videopath':0}
-
-print(json.dumps(data_set, ensure_ascii=False))
-
-print('text here')
-input('download?')
-download = info['webpage_url']
-print(download)
-
-#WTF is a url list
-youtube_dl.YoutubeDL.download('download')
-
-
 """
+
+'outtmpl': 'e:/python/downloadedsongs/%(title)s.%(ext)s',
+ydl_opts = {
+    'format': 'bestaudio/best',
+    'download_archive': 'downloaded_songs.txt',
+    'outtmpl': '%(title)s.%(ext)s',
+    'postprocessors': [{
+        'key': 'FFmpegExtractAudio',
+        'preferredcodec': 'mp3',
+        'preferredquality': '192',
+        }],
+    'logger': MyLogger(),
+    'progress_hooks': [my_hook],
+
+}
+
 with ydl:
     result = ydl.extract_info(
         'http://www.youtube.com/watch?v=BaW_jenozKc',
