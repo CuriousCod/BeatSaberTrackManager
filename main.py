@@ -1,4 +1,5 @@
 import os
+from os import path
 from pathlib import Path
 import youtube_dl
 import json
@@ -6,12 +7,15 @@ import PySimpleGUI as sg
 import PIL
 from PIL import Image
 import urllib
+import functions as fu
+import GUI
 
 # TODO Maybe implement best of three results ytsearch3
 # TODO Make sure the app doesn't download 10 hour videos!
 # DONE Generate video.json
 # DONE Enable youtubedl
-# TODO Make file paths dynamic
+# DONE Make file paths dynamic
+# TODO window references from functions.py don't work
 # TODO Set maximum character limit for description
 # TODO Make sure that .mp4 is the only output format
 # TODO A lot of code cleaning
@@ -21,119 +25,11 @@ import urllib
 # TODO Extra - symbols in folder names are an issue
 # TODO Web interface?
 
-# Start by reading the BS custom track folder and print out all folders that don't have video.json
+# Start by reading the BS custom track folder and print out all folders that don't have video.json CLEAN
 
-yes_video = []
-no_video = []
-x = 0
+# Create a simple GUI to display all the folders without video.json CLEAN
 
-tracks = os.listdir('H:\BSTM\\test_material')  # Make this dynamic
-for i in tracks:
-    print(i)
-    my_file = Path('H:\BSTM\\test_material\\' + i + '\\video.json')
-    if my_file.is_file():
-        print('yes')
-        yes_video.append(i)
-    else:
-        no_video.append(i)
-
-
-f=open('yes_video.txt','w', encoding='utf-8')
-yes_video=map(lambda x:x+'\n', yes_video)
-f.writelines(yes_video)
-f.close()
-
-f=open('no_video.txt','w', encoding='utf-8')
-no_video=map(lambda x:x+'\n', no_video)
-f.writelines(no_video)
-f.close()
-
-f = open("no_video.txt", 'r', encoding='utf-8')
-
-lines = f.read().splitlines()
-f.close()
-for i in lines:
-    name_start = i.find('(') + 1
-    name_end = i.find('-') - 1
-    print(i[name_start:name_end])
-
-# Create a simple GUI to display all the folders without video.json
-
-sg.theme('Dark Teal 11')
-
-col1 = [
-    [sg.Text('', key='video_name', size=(40,4))],
-    [sg.Text('', key='duration', size=(40,1))]
-]
-
-layout = [[sg.Listbox(values=lines, size=(50, 25), enable_events=True, key='track_name'), sg.Button('Search',
-           bind_return_key=True), sg.Button('Download')],
-          [sg.Input('', key='search_field')],
-          [sg.Image(r'', key='thumbnail'), sg.Column(col1)]
-          ]
-
-window = sg.Window('Beat Saber Track Manager', layout, font='Courier 12').finalize()
-window.maximize()
-
-while True:
-    event, values = window.read()
-    if event == sg.WIN_CLOSED or event == 'Exit':  # if user closes window or clicks cancel
-        break
-
-    if event == 'track_name':
-        search = str(values['track_name'])  # The chosen folder
-        search = search[search.find('(') + 1:search.find(
-            '-') - 1]  # Cut the excess text from the folder name, based on ( and - symbols
-        window['search_field'].update(search)
-        window.Refresh()
-
-    # When submit is pressed run youtubeDL script with the chosen folder
-
-    if event == 'Search':
-        ydl = youtube_dl.YoutubeDL({'outtmpl': '%(id)s.%(ext)s'})
-
-        info = ydl.extract_info('ytsearch:' + values['search_field'], download=False, ie_key='YoutubeSearch')
-        info = info['entries'][0]  # TODO Turn this into if later on
-        print(info)  # Print out the extracted video information for debug purposes
-        print(info['title'])
-        print(info['uploader'])
-        #print(info['description'])
-        print(info['duration'])  # Printed in seconds, convert this
-        print(info['webpage_url'])
-        print(info['thumbnail'])
-
-        # Convert duration into mm:ss
-        # Youtube seems to be off by a second from youtubedl, good enough I guess
-        duration = str(int(info['duration'] / 60))
-        duration = duration + ':' + str(info['duration'] % 60)
-
-        urllib.request.urlretrieve(info['thumbnail'], 'thumbnail.png')
-        img = PIL.Image.open('thumbnail.png')
-        img = img.resize((360, 200))
-        img.save('thumbnail.png')
-        window['thumbnail'].update('thumbnail.png')
-        window['video_name'].update(info['title'])
-        window['duration'].update(duration)
-        window.Refresh()
-
-        #  build video.json, "loop":false fixed in a hacky way :D
-        data_set = {'activeVideo':0,'videos':[{'title':info['title'],'author':info['uploader'],'description':info['description'],
-                    'duration':duration,'URL':info['webpage_url'],'thumbnailURL':info['thumbnail'],'loop':'f' + 'alse','offset': 0,'videopath':info['title'] + '.mp4'}],'Count':1}
-
-        # video.json debug
-        print(json.dumps(data_set, ensure_ascii=False))
-
-        #  save video.json, encoding is utf8 otherwise there will be problems with MVP
-        with open('video.json', 'w', encoding='utf8') as outfile:
-            json.dump(data_set, outfile, ensure_ascii=False)
-
-    #  Download the video, when download button is pressed
-    if event == 'Download':
-        download = info['webpage_url']
-        print(download)
-        youtube_dl.YoutubeDL({'outtmpl': '%(title)s.%(ext)s'}).download([download]) #Outputs title.mp4
-
-window.close()  # Don't forget to close your window!
+GUI.create_gui()
 
 """
 
