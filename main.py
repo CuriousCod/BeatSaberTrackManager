@@ -18,6 +18,8 @@ import urllib
 # TODO Implement a decent GUI
 # TODO Standardize folder format for searches '0000 (trackname - maker)'
 # TODO Exception handling: no folder chosen, no video found
+# TODO Extra - symbols in folder names are an issue
+# TODO Web interface?
 
 # Start by reading the BS custom track folder and print out all folders that don't have video.json
 
@@ -25,10 +27,10 @@ yes_video = []
 no_video = []
 x = 0
 
-tracks = os.listdir('F:\Games\Beat Saber 1.8.0\Beat Saber_Data\CustomLevels')  # Make this dynamic
+tracks = os.listdir('H:\BSTM\\test_material')  # Make this dynamic
 for i in tracks:
     print(i)
-    my_file = Path('F:\Games\Beat Saber 1.8.0\Beat Saber_Data\CustomLevels\\' + i + '\\video.json')
+    my_file = Path('H:\BSTM\\test_material\\' + i + '\\video.json')
     if my_file.is_file():
         print('yes')
         yes_video.append(i)
@@ -57,65 +59,73 @@ for i in lines:
 
 # Create a simple GUI to display all the folders without video.json
 
-sg.theme('Dark Brown 1')
+sg.theme('Dark Teal 11')
 
 col1 = [
     [sg.Text('', key='video_name', size=(40,4))],
     [sg.Text('', key='duration', size=(40,1))]
 ]
 
-layout = [[sg.Listbox(values=lines, size=(50, 30)), sg.Button('Submit'), sg.Button('Download')],
-          [sg.Image(r'', key='thumbnail'), sg.Column(col1)]]
+layout = [[sg.Listbox(values=lines, size=(50, 25), enable_events=True, key='track_name'), sg.Button('Search',
+           bind_return_key=True), sg.Button('Download')],
+          [sg.Input('', key='search_field')],
+          [sg.Image(r'', key='thumbnail'), sg.Column(col1)]
+          ]
 
-window = sg.Window('Table Simulation', layout, font='Courier 12', size=(700, 800))
+window = sg.Window('Beat Saber Track Manager', layout, font='Courier 12').finalize()
+window.maximize()
 
 while True:
     event, values = window.read()
     if event == sg.WIN_CLOSED or event == 'Exit':  # if user closes window or clicks cancel
         break
 
-    # When submit is pressed run youtubedl script with the chosen folder
+    if event == 'track_name':
+        search = str(values['track_name'])  # The chosen folder
+        search = search[search.find('(') + 1:search.find(
+            '-') - 1]  # Cut the excess text from the folder name, based on ( and - symbols
+        window['search_field'].update(search)
+        window.Refresh()
 
-    ydl = youtube_dl.YoutubeDL({'outtmpl': '%(id)s.%(ext)s'})
+    # When submit is pressed run youtubeDL script with the chosen folder
 
-    search = str(values[0])  # The chosen folder
-    search = search[search.find('(') + 1:search.find('-') - 1]  # Cut the excess text from the folder name, based on ( and - symbols
-    print(search)
+    if event == 'Search':
+        ydl = youtube_dl.YoutubeDL({'outtmpl': '%(id)s.%(ext)s'})
 
-    info = ydl.extract_info('ytsearch:' + search, download=False, ie_key='YoutubeSearch')
-    info = info['entries'][0]  # TODO Turn this into if later on
-    print(info)  # Print out the extracted video information for debug purposes
-    print(info['title'])
-    print(info['uploader'])
-    #print(info['description'])
-    print(info['duration'])  # Printed in seconds, convert this
-    print(info['webpage_url'])
-    print(info['thumbnail'])
+        info = ydl.extract_info('ytsearch:' + values['search_field'], download=False, ie_key='YoutubeSearch')
+        info = info['entries'][0]  # TODO Turn this into if later on
+        print(info)  # Print out the extracted video information for debug purposes
+        print(info['title'])
+        print(info['uploader'])
+        #print(info['description'])
+        print(info['duration'])  # Printed in seconds, convert this
+        print(info['webpage_url'])
+        print(info['thumbnail'])
 
-    # Convert duration into mm:ss
-    # Youtube seems to be off by a second from youtubedl, good enough I guess
-    duration = str(int(info['duration'] / 60))
-    duration = duration + ':' + str(info['duration'] % 60)
+        # Convert duration into mm:ss
+        # Youtube seems to be off by a second from youtubedl, good enough I guess
+        duration = str(int(info['duration'] / 60))
+        duration = duration + ':' + str(info['duration'] % 60)
 
-    urllib.request.urlretrieve(info['thumbnail'], 'thumbnail.png')
-    img = PIL.Image.open('thumbnail.png')
-    img = img.resize((360, 200))
-    img.save('thumbnail.png')
-    window['thumbnail'].update('thumbnail.png')
-    window['video_name'].update(info['title'])
-    window['duration'].update(duration)
-    window.Refresh()
+        urllib.request.urlretrieve(info['thumbnail'], 'thumbnail.png')
+        img = PIL.Image.open('thumbnail.png')
+        img = img.resize((360, 200))
+        img.save('thumbnail.png')
+        window['thumbnail'].update('thumbnail.png')
+        window['video_name'].update(info['title'])
+        window['duration'].update(duration)
+        window.Refresh()
 
-    #  build video.json, "loop":false fixed in a hacky way :D
-    data_set = {'activeVideo':0,'videos':[{'title':info['title'],'author':info['uploader'],'description':info['description'],
-                'duration':duration,'URL':info['webpage_url'],'thumbnailURL':info['thumbnail'],'loop':'f' + 'alse','offset': 0,'videopath':info['title'] + '.mp4'}],'Count':1}
+        #  build video.json, "loop":false fixed in a hacky way :D
+        data_set = {'activeVideo':0,'videos':[{'title':info['title'],'author':info['uploader'],'description':info['description'],
+                    'duration':duration,'URL':info['webpage_url'],'thumbnailURL':info['thumbnail'],'loop':'f' + 'alse','offset': 0,'videopath':info['title'] + '.mp4'}],'Count':1}
 
-    # video.json debug
-    print(json.dumps(data_set, ensure_ascii=False))
+        # video.json debug
+        print(json.dumps(data_set, ensure_ascii=False))
 
-    #  save video.json, encoding is utf8 otherwise there will be problems with MVP
-    with open('video.json', 'w', encoding='utf8') as outfile:
-        json.dump(data_set, outfile, ensure_ascii=False)
+        #  save video.json, encoding is utf8 otherwise there will be problems with MVP
+        with open('video.json', 'w', encoding='utf8') as outfile:
+            json.dump(data_set, outfile, ensure_ascii=False)
 
     #  Download the video, when download button is pressed
     if event == 'Download':
