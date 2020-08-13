@@ -15,7 +15,10 @@ import GUI
 # DONE Generate video.json
 # DONE Enable youtubedl
 # DONE Make file paths dynamic
-# TODO window references from functions.py don't work
+# DONE window references from functions.py don't work - use global window
+# TODO Display duration of the BS track
+# TODO Duration seconds are not display with double digits, if seconds are less than 10
+# TODO Download files to right folder
 # TODO Set maximum character limit for description
 # TODO Make sure that .mp4 is the only output format
 # TODO A lot of code cleaning
