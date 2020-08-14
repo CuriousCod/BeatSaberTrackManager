@@ -27,6 +27,11 @@ import GUI
 # TODO Exception handling: no folder chosen, no video found
 # TODO Extra - symbols in folder names are an issue
 # TODO Web interface?
+# TODO Get rid of the txt files
+# TODO Exception video.json exists, but is empty
+# TODO Exception info.dat missing
+# TODO Exception for missing data in json files (video.json, info.dat)
+# TODO Exception Missing thumbnail from deleted video
 
 # Start by reading the BS custom track folder and print out all folders that don't have video.json CLEAN
 

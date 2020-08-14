@@ -8,6 +8,7 @@ import PIL
 from PIL import Image
 import urllib
 import functions as fu
+from tinytag import TinyTag
 
 
 def create_gui():
@@ -15,11 +16,19 @@ def create_gui():
 
     col1 = [
         [sg.Text('', key='video_name', size=(40, 4))],
-        [sg.Text('', key='duration', size=(40, 1))]
+        [sg.Text('', key='video_duration', size=(40, 1))]
     ]
 
-    layout = [[sg.Listbox(values='', size=(50, 25), enable_events=True, key='tracklist_novideo'), sg.Listbox(values='',
-               size=(50, 25), key='tracklist_yesvideo')],
+    col2 = [
+        [sg.Text(size=(52,1), key='track_name')],
+        [sg.Text(size=(52,1), key='track_author')],
+        [sg.Text(size=(52,1), key='track_duration')],
+        [sg.Image(key='cover_image')]
+    ]
+
+    layout = [[sg.Combo(values=('All', 'Tracks without video', 'Tracks with video'),
+                        default_value='Tracks without video', enable_events=True, key='track_filter', size=(30, 1))],
+              [sg.Listbox(values='', size=(50, 25), enable_events=True, key='tracklist'), sg.Column(col2)],
               [sg.Input('', key='search_field')],
               [sg.Button('Search', bind_return_key=True),
                sg.Button('Download'), sg.InputText(enable_events=True, key='folder'), sg.FolderBrowse()],
@@ -39,10 +48,73 @@ def create_gui():
         if event == sg.WIN_CLOSED or event == 'Exit':  # if user closes window or clicks cancel
             break
 
-        if event == 'tracklist_novideo':
-            search = str(values['tracklist_novideo'])  # The chosen folder
+        # Grab the text from the chosen listbox choice and paste it into searchbox in readable format.
+        # Also grabs the data from the tracks info.dat
+        if event == 'tracklist':
+            search = str(values['tracklist'])  # Chosen track
+            track_path = values['folder'] + '/' + search.replace('[\'', '').replace('\']', '').replace('"]', '').replace('["', '')
+            with open(track_path + '/info.dat') as f:
+                track_json = json.load(f)
+                img = PIL.Image.open(track_path + '/' + track_json['_coverImageFilename'])
+                img.thumbnail((200, 200))
+                img.save('cover.png')
+                f.close()
+            tag = TinyTag.get(track_path + '/' + track_json['_songFilename'])
+
+            # Convert duration into m:ss
+            duration = str(int(tag.duration / 60))
+            duration = duration + ':' + str(int(tag.duration % 60)).zfill(2)
+
+            if Path(track_path + '/video.json').is_file():
+                with open(track_path + '/video.json', encoding='utf8') as f:
+                    video_json = json.load(f)
+                    if 'videos' in video_json:  # Check if video.json has the new format
+                        print('loli')
+                        print(video_json['videos'][0]['title'])
+                        print(video_json['videos'][0]['duration'])
+                        print(video_json['videos'][0]['thumbnailURL'])
+                        try:
+                            urllib.request.urlretrieve(video_json['videos'][0]['thumbnailURL'], 'thumbnail.png')
+                        except urllib.error.HTTPError:
+                            urllib.request.urlretrieve('http://i.ytimg.com/vi/55AalrbALAk/hqdefault.jpg', 'thumbnail.png')
+                            # TODO URL needs to be changed! #URL needs to be changed! #URL needs to be changed! #URL needs to be changed! #URL needs to be changed!
+                            # URL needs to be changed! #URL needs to be changed! #URL needs to be changed! #URL needs to be changed!
+                        img = PIL.Image.open('thumbnail.png')
+                        img.thumbnail((360, 200))
+                        img.save('thumbnail.png')
+                        window['video_name'].update(video_json['videos'][0]['title'])
+                        window['video_duration'].update(video_json['videos'][0]['duration'].replace('.', ':'))
+                        window['thumbnail'].update('thumbnail.png')
+                    else:
+                        print(video_json['title'])
+                        print(video_json['duration'])
+                        print(video_json['thumbnailURL'])
+                        try:
+                            urllib.request.urlretrieve(video_json['thumbnailURL'], 'thumbnail.png')
+                        except urllib.error.HTTPError:
+                            urllib.request.urlretrieve('http://i.ytimg.com/vi/55AalrbALAk/hqdefault.jpg', 'thumbnail.png') #URL needs to be changed!
+                        # TODO URL needs to be changed! #URL needs to be changed! #URL needs to be changed! #URL needs to be changed! #URL needs to be changed! #URL needs to be changed!
+                        # URL needs to be changed! #URL needs to be changed! #URL needs to be changed! #URL needs to be changed!
+                        img = PIL.Image.open('thumbnail.png')
+                        img.thumbnail((360, 200))
+                        img.save('thumbnail.png')
+                        window['video_name'].update(video_json['title'])
+                        window['video_duration'].update(video_json['duration'].replace('.', ':'))
+                        window['thumbnail'].update('thumbnail.png')
+                    f.close()
+            else:
+                window['video_name'].update('')
+                window['video_duration'].update('')
+                window['thumbnail'].update('')
+
+
             search = search[search.find('(') + 1:search.find(
                 '-') - 1]  # Cut the excess text from the folder name, based on ( and - symbols
+            window['cover_image'].update('cover.png')
+            window['track_name'].update(track_json['_songName'])
+            window['track_author'].update(track_json['_levelAuthorName'])
+            window['track_duration'].update(duration)
+
             window['search_field'].update(search)
             window.Refresh()
 
@@ -66,7 +138,7 @@ def create_gui():
                 # Convert duration into mm:ss
                 # Youtube seems to be off by a second from youtubedl, good enough I guess
                 duration = str(int(info['duration'] / 60))
-                duration = duration + ':' + str(info['duration'] % 60)
+                duration = duration + ':' + str(info['duration'] % 60).zfill(2)
 
                 urllib.request.urlretrieve(info['thumbnail'], 'thumbnail.png')
                 img = PIL.Image.open('thumbnail.png')
@@ -74,7 +146,7 @@ def create_gui():
                 img.save('thumbnail.png')
                 window['thumbnail'].update('thumbnail.png')
                 window['video_name'].update(info['title'])
-                window['duration'].update(duration)
+                window['video_duration'].update(duration)
                 window.Refresh()
 
                 #  build video.json, "loop":false fixed in a hacky way :D
@@ -89,6 +161,7 @@ def create_gui():
                 #  save video.json, encoding is utf8 otherwise there will be problems with MVP
                 with open('C:/Users/KonaKona/PycharmProjects/BeatSaberTrackManager/tracks/video.json', 'w', encoding='utf8') as outfile:
                     json.dump(data_set, outfile, ensure_ascii=False)
+                    outfile.close()
 
         #  Download the video, when download button is pressed
         if event == 'Download':
@@ -100,6 +173,9 @@ def create_gui():
             f = open('config.ini', 'w', encoding='utf-8')
             f.writelines(values['folder'])
             f.close()
+            fu.check_tracks()
+
+        if event == 'track_filter':
             fu.check_tracks()
 
     window.close()  # Don't forget to close your window!0
