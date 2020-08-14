@@ -76,9 +76,7 @@ def create_gui():
                         try:
                             urllib.request.urlretrieve(video_json['videos'][0]['thumbnailURL'], 'thumbnail.png')
                         except urllib.error.HTTPError:
-                            urllib.request.urlretrieve('http://i.ytimg.com/vi/55AalrbALAk/hqdefault.jpg', 'thumbnail.png')
-                            # TODO URL needs to be changed! #URL needs to be changed! #URL needs to be changed! #URL needs to be changed! #URL needs to be changed!
-                            # URL needs to be changed! #URL needs to be changed! #URL needs to be changed! #URL needs to be changed!
+                            urllib.request.urlretrieve('https://s.ytimg.com/yts/img/no_thumbnail-vfl4t3-4R.jpg', 'thumbnail.png')
                         img = PIL.Image.open('thumbnail.png')
                         img.thumbnail((360, 200))
                         img.save('thumbnail.png')
@@ -92,9 +90,7 @@ def create_gui():
                         try:
                             urllib.request.urlretrieve(video_json['thumbnailURL'], 'thumbnail.png')
                         except urllib.error.HTTPError:
-                            urllib.request.urlretrieve('http://i.ytimg.com/vi/55AalrbALAk/hqdefault.jpg', 'thumbnail.png') #URL needs to be changed!
-                        # TODO URL needs to be changed! #URL needs to be changed! #URL needs to be changed! #URL needs to be changed! #URL needs to be changed! #URL needs to be changed!
-                        # URL needs to be changed! #URL needs to be changed! #URL needs to be changed! #URL needs to be changed!
+                            urllib.request.urlretrieve('https://s.ytimg.com/yts/img/no_thumbnail-vfl4t3-4R.jpg', 'thumbnail.png')
                         img = PIL.Image.open('thumbnail.png')
                         img.thumbnail((360, 200))
                         img.save('thumbnail.png')
