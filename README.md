@@ -3,4 +3,5 @@ Lists all downloaded custom tracks and allows downloading videos for the MVP mod
 
 To display tracks choose File -> Select BS Folder -> Choose your CustomLevels folder
 
-https://www.dropbox.com/s/e9zyu6kwbaf0uhi/screenshot%202020-08-15%2018.38.50.png?raw=1
+![Preview image](https://www.dropbox.com/s/e9zyu6kwbaf0uhi/screenshot%202020-08-15%2018.38.50.png?raw=1)
+
