@@ -8,6 +8,7 @@ import PIL
 from PIL import Image
 import urllib
 from tinytag import TinyTag
+import webbrowser
 
 # TODO Maybe implement best of three results ytsearch3
 # DONE Make sure the app doesn't download 10 hour videos! -> Limit is now 1.5x duration of the track or if over 900sec
@@ -53,6 +54,7 @@ def bs_folder():
         window['track_filter'].update(disabled=False)
         check_tracks()
 
+
 def check_tracks():
     event, values = window.read(timeout=0)
 
@@ -95,8 +97,8 @@ def create_gui():
      #   [sg.Text('', key='video_duration', size=(40, 1))]
     ]
 
-    menu_def = [['&File', ['Select BS Folder', 'E&xit']],
-                ['&Help', '&About...'], ]
+    menu_def = [['File', ['Select BS Folder', 'Exit']],
+                ['Help', 'About'], ]
 
     col2 = [
         [sg.Text(size=(38,2), key='track_name_and_author')],
@@ -351,6 +353,11 @@ def create_gui():
                 window['tracklist'].update(results)
                 window.Refresh()
 
+        if event == 'About':
+            print('nope')
+            webbrowser.open('https://github.com/CuriousCod/BeatSaberTrackManager/tree/master')
+
     window.close()
+
 
 create_gui()
