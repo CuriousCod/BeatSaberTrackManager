@@ -357,7 +357,7 @@ def create_gui():
                         # TODO Fix these symbols issues
                     except OSError:
                         print('Could not grab video file size, probably because of a weird symbol in filename')
-                        window['video_size'].update('{}{:.2f}{}'.format('Video downloaded - Could not grab file size'), visible=True)
+                        window['video_size'].update('Video downloaded - Could not grab file size', visible=True)
 
         if event == 'bs_folder':
             browse_bs_folder()
