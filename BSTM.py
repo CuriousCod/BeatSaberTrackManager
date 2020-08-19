@@ -32,14 +32,17 @@ import webbrowser
 # DONE Exception info.dat missing, added try
 # DONE Exception for missing data in json files (video.json, info.dat) -> Added try
 # DONE Exception missing thumbnail from deleted video -> try, except
-# TODO More advanced way to check that the bs folder is currently selected
 # DONE Exception Bring It On crashes search: This video requires payment to watch -> Added try
 # DONE Quick filter for tracks
 # TODO Add delete function
-# TODO Easy way for user to read error log, no error in GUI when no video found
+# DONE Easy way for user to read error log -> Using sg.popup
+# DONE Add file size display
+# TODO video.json with 2 or more videos might cause issues
+# TODO Video titles with unsupported symbols cause issues during download, partially fixed with try
 
 
-def bs_folder():
+# Verify if the browsed CustomLevels folder is valid and write the location to config.ini
+def browse_bs_folder():
     event, values = window.read(timeout=0)
     if values['bs_folder'].find('CustomLevels') == -1:
         print('This is not the custom tracks folder!')
@@ -54,82 +57,10 @@ def bs_folder():
         check_tracks()
 
 
-def check_tracks():
+# Check config.ini for the bs folder location
+def config_bs_folder():
     event, values = window.read(timeout=0)
-
-    global yes_video
-    global no_video
-    global both_video
-
-    yes_video = []
-    no_video = []
-    both_video = []
-
-    tracks = os.listdir(values['bs_folder'])
-    for i in tracks:
-        print(i)
-        both_video.append(i)
-        my_file = Path(values['bs_folder'] + '\\' + i + '\\video.json')
-        if my_file.is_file():
-            print('yes')
-            yes_video.append(i)
-        else:
-            no_video.append(i)
-
-    # Python doesn't have case/switch statement?!
-    if values['track_filter'] == 'All tracks':
-        window['tracklist'].update(both_video)
-    elif values['track_filter'] == 'Tracks without video':
-        window['tracklist'].update(no_video)
-        #window['tracklist'].update(text_color='green')  # TODO this doesn't work
-    elif values['track_filter'] == 'Tracks with video':
-        window['tracklist'].update(yes_video)
-
-    window.Refresh()
-
-
-def create_gui():
-    sg.theme('Dark Teal 11')
-
-    col1 = [
-     #   [sg.Text('', key='video_name', size=(40, 4))],
-     #   [sg.Text('', key='video_duration', size=(40, 1))]
-    ]
-
-    menu_def = [['File', ['Select BS Folder', 'Exit']],
-                ['Help', 'About'], ]
-
-    col2 = [
-        [sg.Text(size=(38,2), key='track_name_and_author')],
-        #[sg.Text(size=(40,2), key='track_author')],
-        [sg.Text(size=(38,1), key='track_duration')],
-        [sg.Image(key='cover_image')],
-        [sg.Text('', size=(38, 1))],  # Empty line
-        [sg.Text('', key='video_name', size=(38, 2))],
-        [sg.Text('', key='video_duration', size=(38, 1))],
-        [sg.Image(r'', key='thumbnail')],
-        [sg.Text('Video downloaded', size=(38, 1), visible=False, key='downloaded')]
-    ]
-
-    layout = [
-              [sg.Menu(menu_def)],
-              [sg.Combo(values=('All tracks', 'Tracks without video', 'Tracks with video'),
-                        default_value='All tracks', enable_events=True, key='track_filter', size=(30, 1)),
-                        sg.Text('Filter'), sg.InputText(size=(10, 1), key='filter', enable_events=True)],
-              [sg.Listbox(values='', size=(50, 33), enable_events=True, key='tracklist',
-                          right_click_menu=['&Right', ['Search', 'Open track folder']]), sg.Column(col2)],
-              [sg.Text('Youtube Search Term:')],
-              [sg.Input('', key='search_field')],
-              [sg.Button('Search Youtube', bind_return_key=True),
-               sg.Button('Download', disabled=True), sg.InputText(enable_events=True, key='bs_folder', visible=False)]
-              #[sg.Image(r'', key='thumbnail'), sg.Column(col1)]
-              ]
-
-    global window
-    window = sg.Window('Beat Saber Track Manager', layout, font='Courier 12').finalize()
-
-    # Check config.ini for the bs folder location
-    if path.exists('config.ini'):  # TODO Turn this into a function
+    if path.exists('config.ini'):
         f = open('config.ini', 'r', encoding='utf-8')
         verifyfolder = f.read()
         window['bs_folder'].update(verifyfolder)
@@ -141,6 +72,83 @@ def create_gui():
             window.Refresh()
         else:
             check_tracks()
+
+
+# Read and print the CustomLevels folder
+def check_tracks():
+    event, values = window.read(timeout=0)
+
+    global yes_video
+    global no_video
+    global both_video
+
+    yes_video = []
+    no_video = []
+    both_video = []
+
+    try:
+        tracks = os.listdir(values['bs_folder'])
+        for i in tracks:
+            print(i)
+            both_video.append(i)
+            my_file = Path(values['bs_folder'] + '\\' + i + '\\video.json')
+            if my_file.is_file():
+                print('yes')
+                yes_video.append(i)
+            else:
+                no_video.append(i)
+
+        # Python doesn't have case/switch statement?!
+        if values['track_filter'] == 'All tracks':
+            window['tracklist'].update(both_video)
+        elif values['track_filter'] == 'Tracks without video':
+            window['tracklist'].update(no_video)
+            #window['tracklist'].update(text_color='green')  # TODO this doesn't work
+        elif values['track_filter'] == 'Tracks with video':
+            window['tracklist'].update(yes_video)
+    except OSError:
+        print('CustomLevels folder is not valid!')
+        sg.popup('CustomLevels folder is not valid.\nPlease select the CustomLevels folder from the file menu.')
+
+    window.Refresh()
+
+
+def create_gui():
+    sg.theme('Dark Teal 11')
+
+    menu_def = [['File', ['Select CustomLevels Folder', 'Exit']],
+                ['Help', 'About'], ]
+
+    col1 = [
+        [sg.Text(size=(38,2), key='track_name_and_author')],
+        [sg.Text(size=(38,1), key='track_duration')],
+        [sg.Image(key='cover_image')],
+        [sg.Text('', size=(38, 1))],  # Empty line
+        [sg.Text('', key='video_name', size=(38, 2))],
+        [sg.Text('', key='video_duration', size=(38, 1))],
+        [sg.Image(r'', key='thumbnail')],
+        #[sg.Text('Video downloaded - ', size=(38, 1), visible=False, key='downloaded')],
+        [sg.Text('Video Downloaded - ', size=(38, 1), visible=False, key='video_size')]
+    ]
+
+    layout = [
+              [sg.Menu(menu_def)],
+              [sg.Combo(values=('All tracks', 'Tracks without video', 'Tracks with video'),
+                        default_value='All tracks', enable_events=True, key='track_filter', size=(30, 1)),
+                        sg.Text('Filter'), sg.InputText(size=(10, 1), key='filter', enable_events=True)],
+              [sg.Listbox(values='', size=(50, 33), enable_events=True, key='tracklist',
+                          right_click_menu=['&Right', ['Search Youtube', 'Open track folder']]), sg.Column(col1)],
+              [sg.Text('Youtube Search Term:')],
+              [sg.Input('', key='search_field')],
+              [sg.Button('Search Youtube', bind_return_key=True),
+               sg.Button('Download', disabled=True), sg.InputText(enable_events=True, key='bs_folder', visible=False)]
+              ]
+
+    global window
+    window = sg.Window('Beat Saber Track Manager', layout, font='Courier 12').finalize()
+
+    # Check for config.ini
+    config_bs_folder()
 
     while True:
         event, values = window.read()
@@ -202,50 +210,54 @@ def create_gui():
                     window['track_duration'].update('')
 
                 if Path(track_path + '/video.json').is_file():
-                    window['downloaded'].update(visible=True)
                     with open(track_path + '/video.json', encoding='utf8') as f:
                         try:
                             video_json = json.load(f)
-                            if 'videos' in video_json:  # Check if video.json has the new format
-                                print(video_json['videos'][0]['title'])
-                                print(video_json['videos'][0]['duration'])
-                                print(video_json['videos'][0]['thumbnailURL'])
-                                try:
-                                    urllib.request.urlretrieve(video_json['videos'][0]['thumbnailURL'], 'thumbnail.png')
-                                except urllib.error.HTTPError:
-                                    urllib.request.urlretrieve('https://s.ytimg.com/yts/img/no_thumbnail-vfl4t3-4R.jpg', 'thumbnail.png')
-                                img = PIL.Image.open('thumbnail.png')
-                                img.thumbnail((360, 200))
-                                img.save('thumbnail.png')
-                                window['video_name'].update(video_json['videos'][0]['title'])
-                                window['video_duration'].update(video_json['videos'][0]['duration'].replace('.', ':'))
-                                window['thumbnail'].update('thumbnail.png')
-                            else:
-                                print(video_json['title'])
-                                print(video_json['duration'])
-                                print(video_json['thumbnailURL'])
-                                try:
-                                    urllib.request.urlretrieve(video_json['thumbnailURL'], 'thumbnail.png')
-                                except urllib.error.HTTPError:
-                                    urllib.request.urlretrieve('https://s.ytimg.com/yts/img/no_thumbnail-vfl4t3-4R.jpg', 'thumbnail.png')
-                                img = PIL.Image.open('thumbnail.png')
-                                img.thumbnail((360, 200))
-                                img.save('thumbnail.png')
-                                window['video_name'].update(video_json['title'])
-                                window['video_duration'].update(video_json['duration'].replace('.', ':'))
-                                window['thumbnail'].update('thumbnail.png')
+                            # Check if the json is in the new format, if not convert it
+                            # Currently only the first video in the json file is grabbed
+                            if 'videos' not in video_json:
+                                video_json = {'activeVideo': 0, 'videos': [video_json]}
+
+                            av = video_json['activeVideo']  # Grab only the active video
+
+                            # Fix lowercase key
+                            if 'videopath' in video_json['videos'][av]:
+                                video_json['videos'][av]['videoPath'] = video_json['videos'][av]['videopath']
+                                del video_json['videos'][av]['videopath']
+
+                            print(video_json['videos'][av]['title'])
+                            print(video_json['videos'][av]['duration'])
+                            print(video_json['videos'][av]['thumbnailURL'])
+                            try:
+                                urllib.request.urlretrieve(video_json['videos'][av]['thumbnailURL'], 'thumbnail.png')
+                            except urllib.error.HTTPError:
+                                urllib.request.urlretrieve('https://s.ytimg.com/yts/img/no_thumbnail-vfl4t3-4R.jpg', 'thumbnail.png')
+                            img = PIL.Image.open('thumbnail.png')
+                            img.thumbnail((360, 200))
+                            img.save('thumbnail.png')
+                            window['video_name'].update(video_json['videos'][av]['title'])
+                            window['video_duration'].update(video_json['videos'][av]['duration'].replace('.', ':'))
+                            window['thumbnail'].update('thumbnail.png')
+
+                            try:
+                                video_size = os.stat(track_path + '/' + video_json['videos'][av]['videoPath']).st_size / 1000000
+                                window['video_size'].update('{}{:.2f}{}'.format('Video downloaded - ', video_size, ' MB'), visible=True)
+                            except FileNotFoundError:
+                                print('Video not found!')
+                                window['video_size'].update('Video file not found in folder', visible=True)
                             f.close()
 
                         #  Skip printing video info, if video.json is in weird format or empty
                         except json.decoder.JSONDecodeError:
-                            window['downloaded'].update(visible=False)
+                            print('video.json empty or not in proper format!')
+                            window['video_size'].update(visible=False)
                             window['video_name'].update('video.json empty or not in proper format!')
                 else:
-                    print('video.json empty or not in proper format!')
-                    window['downloaded'].update(visible=False)
+                    window['video_size'].update(visible=False)
                     window['video_name'].update('')
                     window['video_duration'].update('')
                     window['thumbnail'].update('')
+                    window['video_size'].update(visible=False)
 
                 # If track contains proper info.dat, display track name and author on the search field
                 if info_dat:
@@ -258,19 +270,22 @@ def create_gui():
                 window['Download'].update(disabled=True)
                 window.Refresh()
 
+        # Run search with the search term, only grabs the 1st result
         if event == 'Search Youtube':
-            window['downloaded'].update(visible=False)
+            window['video_size'].update(visible=False)
 
             if not values['search_field']:
                 print('Search field empty!')
+                sg.popup('Please input a search term.\n')
             elif not values['tracklist']:
                 print('No track selected!')
+                sg.popup('Please select a track from the list.\n')
             else:
                 try:
                     ydl = youtube_dl.YoutubeDL({'outtmpl': '%(id)s.%(ext)s'})
 
                     info = ydl.extract_info('ytsearch:' + values['search_field'], download=False, ie_key='YoutubeSearch')
-                    info = info['entries'][0]  # TODO Turn this into if later on
+                    info = info['entries'][0]  # Grab only the first entry, in case the result is a playlist
                     print(info)  # Print out the extracted video information for debug purposes
                     print(info['title'])
                     print(info['uploader'])
@@ -297,16 +312,22 @@ def create_gui():
                     data_set = {'activeVideo': 0, 'videos': [
                         {'title': info['title'], 'author': info['uploader'], 'description': info['description'][0:106] + ' ...',
                          'duration': video_duration, 'URL': info['webpage_url'], 'thumbnailURL': info['thumbnail'],
-                         'loop': 'f' + 'alse', 'offset': 0, 'videopath': info['title'] + '.mp4'}], 'Count': 1}
+                         'loop': 'f' + 'alse', 'offset': 0, 'videoPath': info['title'].replace('/', '_') + '.mp4'}], 'Count': 1}
 
                     # video.json debug
                     print(json.dumps(data_set, ensure_ascii=False))
 
                     window['Download'].update(disabled=False)
+
+                    # TODO Fix file size grab
+                    #print(info)
+                    #video_size = int(info['formats'][0]['filesize']) #/ 1000000
+                    #window['video_size'].update('{:.2f}{}'.format(video_size, ' MB'), visible=True)
                     window.Refresh()
 
                 except youtube_dl.utils.DownloadError:
                     print('No video found or unable to download video!')
+                    sg.popup('No video found or unable to download video\n')
 
         #  Download the video, when download button is pressed
         if event == 'Download':
@@ -328,10 +349,16 @@ def create_gui():
                         outfile.close()
                     #  Download the video
                     youtube_dl.YoutubeDL({'outtmpl': track_path + '/%(title)s.%(ext)s'}).download([download])  # Outputs title + extension
-                    window['downloaded'].update(visible=True)
+                    try:
+                        video_size = os.stat(track_path + '/' + data_set['videos'][0]['videoPath'].replace('/', '_')).st_size / 1000000
+                        window['video_size'].update('{}{:.2f}{}'.format('Video downloaded - ', video_size, ' MB'),
+                                                    visible=True)
+                    except FileNotFoundError:
+                        print('Could not grab video file size, probably because of a weird symbol in filename')
+                        window['video_size'].update('{}{:.2f}{}'.format('Video downloaded - Could not grab file size'), visible=True)
 
         if event == 'bs_folder':
-            bs_folder()
+            browse_bs_folder()
 
         if event == 'track_filter':
             check_tracks()
@@ -346,14 +373,14 @@ def create_gui():
                 print('No track selected')
                 continue
 
-        if event == 'Select BS Folder':
+        if event == 'Select CustomLevels Folder':
             trackfolder = sg.popup_get_folder('', title='Select CustomLevels folder',
                                               no_window=True, modal=True, keep_on_top=True)
             if not trackfolder:
                 print('No folder selected!')
             else:
                 window['bs_folder'].update(trackfolder)
-                bs_folder()
+                browse_bs_folder()
 
         if event == 'filter':
 
@@ -369,7 +396,7 @@ def create_gui():
             if len(values['filter']) < 2:
                 window['tracklist'].update(filter_list)
 
-            # Don't search, if filter has less than 3 characters
+            # Don't filter, if the filter has less than 3 characters
             if len(values['filter']) < 3:
                 continue
             else:
@@ -380,7 +407,6 @@ def create_gui():
                 window.Refresh()
 
         if event == 'About':
-            print('nope')
             webbrowser.open('https://github.com/CuriousCod/BeatSaberTrackManager/tree/master')
 
     window.close()
