@@ -3,8 +3,8 @@ Lists all downloaded custom tracks and allows downloading videos for the MVP mod
 
 To display tracks choose File -> Select CustomLevels Folder -> Choose your CustomLevels folder
 
-Custom track folder naming should follow the same format as when downloaded with the More Songs mod:
-TrackID (TrackName - TrackMaker)
+Custom track folder naming should follow the same format as when downloaded with the More Songs mod:</br>
+TrackID (TrackName - TrackMaker)</br>
 8149 (Great Days - Joetastic)
 
 Currently supports only one video at a time. If multiple videos are in the folder the application picks the one set as active(activeVideo) in video.json.
