@@ -1,7 +1,7 @@
 # BeatSaberTrackManager
 Lists all downloaded custom tracks and allows downloading videos for the MVP mod https://github.com/rie-kumar/MusicVideoPlayer, currently adjusted for the v1.10.0 mod version.
 
-To display tracks choose File -> Select BS Folder -> Choose your CustomLevels folder
+To display tracks choose File -> Select CustomLevels Folder -> Choose your CustomLevels folder
 
 Custom track folder naming should follow the same format as when downloaded with the More Songs mod:
 TrackID (TrackName - TrackMaker)
