@@ -7,5 +7,7 @@ Custom track folder naming should follow the same format as when downloaded with
 TrackID (TrackName - TrackMaker)
 8149 (Great Days - Joetastic)
 
+Currently supports only one video at a time. If multiple videos are in the folder the application picks the one set as active(activeVideo) in video.json.
+
 ![Preview image](https://www.dropbox.com/s/e9zyu6kwbaf0uhi/screenshot%202020-08-15%2018.38.50.png?raw=1)
 
