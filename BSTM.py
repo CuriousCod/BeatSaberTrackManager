@@ -38,7 +38,8 @@ import webbrowser
 # DONE Easy way for user to read error log -> Using sg.popup
 # DONE Add file size display
 # TODO video.json with 2 or more videos might cause issues
-# TODO Video titles with unsupported symbols cause issues during download, partially fixed with try
+# TODO Video titles with unsupported symbols cause issues during download, partially fixed with try (/,* fixed)
+# TODO Unsupported symbols: \ : ? " < > |
 
 
 # Verify if the browsed CustomLevels folder is valid and write the location to config.ini
@@ -312,7 +313,7 @@ def create_gui():
                     data_set = {'activeVideo': 0, 'videos': [
                         {'title': info['title'], 'author': info['uploader'], 'description': info['description'][0:106] + ' ...',
                          'duration': video_duration, 'URL': info['webpage_url'], 'thumbnailURL': info['thumbnail'],
-                         'loop': 'f' + 'alse', 'offset': 0, 'videoPath': info['title'].replace('/', '_') + '.mp4'}], 'Count': 1}
+                         'loop': 'f' + 'alse', 'offset': 0, 'videoPath': info['title'].replace('/', '_').replace('*', '_') + '.mp4'}], 'Count': 1}
 
                     # video.json debug
                     print(json.dumps(data_set, ensure_ascii=False))
@@ -350,10 +351,11 @@ def create_gui():
                     #  Download the video
                     youtube_dl.YoutubeDL({'outtmpl': track_path + '/%(title)s.%(ext)s'}).download([download])  # Outputs title + extension
                     try:
-                        video_size = os.stat(track_path + '/' + data_set['videos'][0]['videoPath'].replace('/', '_')).st_size / 1000000
+                        video_size = os.stat(track_path + '/' + data_set['videos'][0]['videoPath'].replace('/', '_').replace('*', '_')).st_size / 1000000
                         window['video_size'].update('{}{:.2f}{}'.format('Video downloaded - ', video_size, ' MB'),
                                                     visible=True)
-                    except FileNotFoundError:
+                        # TODO Fix these symbols issues
+                    except OSError:
                         print('Could not grab video file size, probably because of a weird symbol in filename')
                         window['video_size'].update('{}{:.2f}{}'.format('Video downloaded - Could not grab file size'), visible=True)
 
