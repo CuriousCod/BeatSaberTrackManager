@@ -9,6 +9,7 @@ from PIL import Image
 import urllib
 from tinytag import TinyTag
 import webbrowser
+import subprocess
 
 # TODO Maybe implement best of three results ytsearch3
 # DONE Make sure the app doesn't download 10 hour videos! -> Limit is now 1.5x duration of the track or if over 900sec
@@ -38,7 +39,9 @@ import webbrowser
 # DONE Easy way for user to read error log -> Using sg.popup
 # DONE Add file size display
 # TODO video.json with 2 or more videos might cause issues
-# DONE Video titles with unsupported symbols cause issues during download * / \ : ? " < > | -> Replace during display
+# DONE Video titles with unsupported symbols cause issues during download * / \ : ? < > | -> Replace during display
+# DONE youtubeDL turns " into ' -> Added replace
+# TODO 2df2 crashes auto offset
 
 
 # Verify if the browsed CustomLevels folder is valid and write the location to config.ini
@@ -48,12 +51,15 @@ def browse_bs_folder():
         print('This is not the custom tracks folder!')
         window['tracklist'].update('')
         window['track_filter'].update(disabled=True)
+        window['filter'].update(visible=False)
         window.Refresh()
+        return False
     else:
         f = open('config.ini', 'w', encoding='utf-8')
         f.writelines(values['bs_folder'])
         f.close()
         window['track_filter'].update(disabled=False)
+        window['filter'].update(visible=True)
         check_tracks()
 
 
@@ -69,9 +75,22 @@ def config_bs_folder():
             print('This is not the custom tracks folder!')
             window['tracklist'].update('')
             window['track_filter'].update(disabled=True)
+            window['filter'].update(visible=False)
             window.Refresh()
         else:
             check_tracks()
+
+
+# Clears displayed info in the GUI
+def clear_info(clear):
+
+    if not clear:
+        clear = ['track_name_and_author', 'track_duration', 'cover_image', 'video_name', 'video_duration', 'thumbnail', 'video_size', 'offset']
+
+    for i in clear:
+        window[i].update('')
+
+    window['Auto Offset'].update(disabled=True)
 
 
 # Read and print the CustomLevels folder
@@ -127,8 +146,8 @@ def create_gui():
         [sg.Text('', key='video_name', size=(38, 2))],
         [sg.Text('', key='video_duration', size=(38, 1))],
         [sg.Image(r'', key='thumbnail')],
-        #[sg.Text('Video downloaded - ', size=(38, 1), visible=False, key='downloaded')],
-        [sg.Text('Video Downloaded - ', size=(38, 1), visible=False, key='video_size')]
+        [sg.Text('Video Downloaded - ', size=(38, 1), visible=False, key='video_size')],
+        [sg.Text('Offset ', size=(38, 1), visible=False, key='offset')]
     ]
 
     layout = [
@@ -136,13 +155,13 @@ def create_gui():
               [sg.Combo(values=('All tracks', 'Tracks without video', 'Tracks with video'),
                         default_value='All tracks', enable_events=True, key='track_filter', size=(30, 1)),
                         sg.Text('Filter'), sg.InputText(size=(10, 1), key='filter', enable_events=True)],
-              [sg.Listbox(values='', size=(50, 33), enable_events=True, key='tracklist',
+              [sg.Listbox(values='', size=(50, 34), enable_events=True, key='tracklist',
                           right_click_menu=['&Right', ['Search Youtube', 'Open track folder']]), sg.Column(col1)],
               [sg.Text('Youtube Search Term:')],
-              [sg.Input('', key='search_field')],
+              [sg.Input('', size=(50, 1), key='search_field')],
               [sg.Button('Search Youtube', bind_return_key=True),
-               sg.Button('Download', disabled=True), sg.InputText(enable_events=True, key='bs_folder', visible=False)],
-              #[sg.Button('Offset')]
+               sg.Button('Download', disabled=True), sg.InputText(enable_events=True, key='bs_folder', visible=False),
+               sg.Button('Auto Offset', disabled=True)]
               ]
 
     global window
@@ -152,7 +171,7 @@ def create_gui():
     config_bs_folder()
 
     # These symbols don't work on filenames
-    ng_symbols = ['*', '/', '\\', ':', '?', '\"', '<', '>', '|']
+    ng_symbols = ['*', '/', '\\', ':', '?', '<', '>', '|', ]
 
     while True:
         event, values = window.read()
@@ -168,6 +187,7 @@ def create_gui():
         # Also grabs the data from the track's info.dat
         if event == 'tracklist':
             info = None  # Clear video info from previous searches
+            clear_info('')
             if not values['tracklist']:
                 print('No tracks!')
             else:
@@ -200,18 +220,16 @@ def create_gui():
                     info_dat = False
                     print('Missing info.dat file!')
                     track_seconds = 600
-                    window['cover_image'].update('')
                     window['track_name_and_author'].update('info.dat missing!')
-                    window['track_duration'].update('')
+                    #clear_info(['cover_image', 'track_duration'])
 
                 #  Reset fields and set duration to 600 seconds, if info.dat is in weird format or empty
                 except json.decoder.JSONDecodeError:
                     info_dat = False
                     print('info.dat empty or not in proper format!')
                     track_seconds = 600
-                    window['cover_image'].update('')
                     window['track_name_and_author'].update('info.dat empty or not in proper format!')
-                    window['track_duration'].update('')
+                    #clear_info(['cover_image', 'track_duration'])
 
                 if Path(track_path + '/video.json').is_file():
                     with open(track_path + '/video.json', encoding='utf8') as f:
@@ -232,6 +250,8 @@ def create_gui():
                             print(video_json['videos'][av]['title'])
                             print(video_json['videos'][av]['duration'])
                             print(video_json['videos'][av]['thumbnailURL'])
+
+                            # Find video thumbnail
                             try:
                                 urllib.request.urlretrieve(video_json['videos'][av]['thumbnailURL'], 'thumbnail.png')
                             except urllib.error.HTTPError:
@@ -239,10 +259,15 @@ def create_gui():
                             img = PIL.Image.open('thumbnail.png')
                             img.thumbnail((360, 200))
                             img.save('thumbnail.png')
+
+                            # Update fields
                             window['video_name'].update(video_json['videos'][av]['title'])
                             window['video_duration'].update(video_json['videos'][av]['duration'].replace('.', ':'))
                             window['thumbnail'].update('thumbnail.png')
+                            window['offset'].update('{}{}'.format('Offset: ', video_json['videos'][av]['offset']), visible=True)
+                            window['Auto Offset'].update(disabled=False)
 
+                            # Find video in folder
                             try:
                                 video_path = video_json['videos'][av]['videoPath']
                                 for i in ng_symbols:
@@ -257,14 +282,7 @@ def create_gui():
                         #  Skip printing video info, if video.json is in weird format or empty
                         except json.decoder.JSONDecodeError:
                             print('video.json empty or not in proper format!')
-                            window['video_size'].update(visible=False)
                             window['video_name'].update('video.json empty or not in proper format!')
-                else:
-                    window['video_size'].update(visible=False)
-                    window['video_name'].update('')
-                    window['video_duration'].update('')
-                    window['thumbnail'].update('')
-                    window['video_size'].update(visible=False)
 
                 # If track contains proper info.dat, display track name and author on the search field
                 if info_dat:
@@ -279,7 +297,7 @@ def create_gui():
 
         # Run search with the search term, only grabs the 1st result
         if event == 'Search Youtube':
-            window['video_size'].update(visible=False)
+            clear_info(['video_size', 'offset'])
 
             if not values['search_field']:
                 print('Search field empty!')
@@ -315,11 +333,12 @@ def create_gui():
                     window['video_duration'].update(video_duration)
                     window.Refresh()
 
-                    #  build video.json, "loop":false fixed in a hacky way :D, limited description to 106 characters
+                    #  Build video.json, "loop":false fixed in a hacky way :D, limited description to 106 characters
+                    #  Unsupported symbols in Windows cause issues, manually replace " - > ' in videoPath
                     data_set = {'activeVideo': 0, 'videos': [
                         {'title': info['title'], 'author': info['uploader'], 'description': info['description'][0:106] + ' ...',
                          'duration': video_duration, 'URL': info['webpage_url'], 'thumbnailURL': info['thumbnail'],
-                         'loop': 'f' + 'alse', 'offset': 0, 'videoPath': info['title'].replace('/', '_').replace('*', '_') + '.mp4'}], 'Count': 1}
+                         'loop': 'f' + 'alse', 'offset': 0, 'videoPath': info['title'].replace('\"', '\'') + '.mp4'}], 'Count': 1}
 
                     # video.json debug
                     print(json.dumps(data_set, ensure_ascii=False))
@@ -363,34 +382,44 @@ def create_gui():
                         video_size = os.stat(track_path + '/' + video_path).st_size / 1000000
                         window['video_size'].update('{}{:.2f}{}'.format('Video downloaded - ', video_size, ' MB'),
                                                     visible=True)
-                        # TODO Fix these symbols issues
+                        #window['Auto Offset'].update(disabled=False)  # TODO track_json not updated during download
+                        window['offset'].update('{}{}'.format('Offset: ', data_set['videos'][0]['offset']),
+                                                visible=True)
+
                     except OSError:
                         print('Could not grab video file size, probably because of a weird symbol in filename')
-                        window['video_size'].update('Video downloaded - Could not grab file size', visible=True)
+                        window['video_size'].update('Video downloaded - File size not available', visible=True)
 
-        # TODO MESSY
-        if event == 'Offset':
-            import subprocess
-            #tool = 'F:/Games/Beat Saber 1.8.0/Beat Saber_Data/CustomLevels'
-            tool = values['bs_folder']
-            tool = tool[0:tool.find('Beat Saber_Data')]
-            tool = tool + 'Youtube-dl/SyncVideoWithAudio/SyncVideoWithAudio.exe'
-            tool = '\"' + tool + '\"' + ' offset'
-            # tool = '"F:/Games/Beat Saber 1.8.0/Youtube-dl/SyncVideoWithAudio/SyncVideoWithAudio.exe" offset'
-            #track = ' "F:/Games/Beat Saber 1.8.0/Beat Saber_Data/CustomLevels/1ac4 (Ghosts Play to the Audience - dankruptmemer)/song.egg"'
-            #video = ' "F:/Games/Beat Saber 1.8.0/Beat Saber_Data/CustomLevels/1ac4 (Ghosts Play to the Audience - dankruptmemer)/PinocchioP - Ghosts Play to the Audience _ ピノキオピー- おばけのウケねらい.mp4"'
+        # Calculate audio/video offset using the MVP's tools
+        if event == 'Auto Offset':
+
+            window['offset'].update('Calculating offset...', visible=True)
+            window.Refresh()
+
+            offset_tool = values['bs_folder'][0:values['bs_folder'].find('Beat Saber_Data')]
+            offset_tool = '\"' + offset_tool + 'Youtube-dl/SyncVideoWithAudio/SyncVideoWithAudio.exe' + '\"' + ' offset'
+
             search = str(values['tracklist'])  # Chosen track
             track_path = values['bs_folder'] + '/' + search.replace('[\'', '').replace('\']', '').replace('"]', '').replace('["', '')
-            track = ' \"' + track_path + '/' + track_json['_songFilename'] + '\"'
-            print(track)
-            video = ' \"' + track_path + '/' +  video_json['videos'][av]['videoPath'] + '\"' # TODO No ng symbol check
-            print(video)
-            a = subprocess.run(tool + track + video, shell=True, capture_output=True)
-            a = str(a)
-            print(a)
-            b = a[a.find('%') + 10:a.find('\', stderr')]
-            c = int(float(b.replace(',', '.')))
-            print(c)
+
+            offset_audio = ' \"' + track_path + '/' + track_json['_songFilename'] + '\"'  # TODO track_json not updated during download
+            print(offset_audio)
+
+            for i in ng_symbols:
+                video_json['videos'][av]['videoPath'].replace(i, '_')
+                offset_video = ' \"' + track_path + '/' + video_json['videos'][av]['videoPath'] + '\"'
+            print(offset_video)
+
+            offset = subprocess.run(offset_tool + offset_audio + offset_video, shell=True, capture_output=True)
+            # Convert results to str and search the string for the result. There's probably an easier way for this.
+            offset = str(offset)
+            print(offset)
+            offset = offset[offset.rfind('%') + 10:offset.replace('\"', '\'').rfind('\', stderr')].replace(',', '.')
+            print(offset)
+            offset = int(float(offset))
+            offset *= -1  # Values are flipped in video.json
+            window['offset'].update('{}{}'.format('Offset: ', offset), visible=True)
+            window['Auto Offset'].update(disabled=True)
 
         if event == 'bs_folder':
             browse_bs_folder()
@@ -414,6 +443,7 @@ def create_gui():
             if not trackfolder:
                 print('No folder selected!')
             else:
+                clear_info()
                 window['bs_folder'].update(trackfolder)
                 browse_bs_folder()
 
@@ -435,6 +465,7 @@ def create_gui():
             if len(values['filter']) < 3:
                 continue
             else:
+                clear_info('')
                 for i in filter_list:
                     if (values['filter']) in i.lower():
                         results.append(i)
@@ -443,7 +474,6 @@ def create_gui():
 
         if event == 'About':
             webbrowser.open('https://github.com/CuriousCod/BeatSaberTrackManager/tree/master')
-
 
     window.close()
 
