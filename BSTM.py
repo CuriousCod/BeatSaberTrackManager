@@ -414,7 +414,7 @@ def create_gui():
             # Convert results to str and search the string for the result. There's probably an easier way for this.
             offset = str(offset)
             print(offset)
-            offset = offset[offset.rfind('%') + 10:offset.replace('\"', '\'').rfind('\', stderr')].replace(',', '.')
+            offset = offset[offset.rfind('%') + 10:offset.find(',', offset.rfind('%') + 10)]
             print(offset)
             offset = int(float(offset))
             offset *= -1  # Values are flipped in video.json
