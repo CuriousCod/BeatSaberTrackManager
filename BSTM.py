@@ -38,8 +38,7 @@ import webbrowser
 # DONE Easy way for user to read error log -> Using sg.popup
 # DONE Add file size display
 # TODO video.json with 2 or more videos might cause issues
-# TODO Video titles with unsupported symbols cause issues during download, partially fixed with try (/,* fixed)
-# TODO Unsupported symbols: \ : ? " < > |
+# DONE Video titles with unsupported symbols cause issues during download * / \ : ? " < > | -> Replace during display
 
 
 # Verify if the browsed CustomLevels folder is valid and write the location to config.ini
@@ -142,7 +141,8 @@ def create_gui():
               [sg.Text('Youtube Search Term:')],
               [sg.Input('', key='search_field')],
               [sg.Button('Search Youtube', bind_return_key=True),
-               sg.Button('Download', disabled=True), sg.InputText(enable_events=True, key='bs_folder', visible=False)]
+               sg.Button('Download', disabled=True), sg.InputText(enable_events=True, key='bs_folder', visible=False)],
+              #[sg.Button('Offset')]
               ]
 
     global window
@@ -150,6 +150,9 @@ def create_gui():
 
     # Check for config.ini
     config_bs_folder()
+
+    # These symbols don't work on filenames
+    ng_symbols = ['*', '/', '\\', ':', '?', '\"', '<', '>', '|']
 
     while True:
         event, values = window.read()
@@ -241,7 +244,10 @@ def create_gui():
                             window['thumbnail'].update('thumbnail.png')
 
                             try:
-                                video_size = os.stat(track_path + '/' + video_json['videos'][av]['videoPath']).st_size / 1000000
+                                video_path = video_json['videos'][av]['videoPath']
+                                for i in ng_symbols:
+                                    video_path = video_path.replace(i, '_')
+                                video_size = os.stat(track_path + '/' + video_path).st_size / 1000000
                                 window['video_size'].update('{}{:.2f}{}'.format('Video downloaded - ', video_size, ' MB'), visible=True)
                             except FileNotFoundError:
                                 print('Video not found!')
@@ -351,13 +357,40 @@ def create_gui():
                     #  Download the video
                     youtube_dl.YoutubeDL({'outtmpl': track_path + '/%(title)s.%(ext)s'}).download([download])  # Outputs title + extension
                     try:
-                        video_size = os.stat(track_path + '/' + data_set['videos'][0]['videoPath'].replace('/', '_').replace('*', '_')).st_size / 1000000
+                        video_path = data_set['videos'][0]['videoPath']
+                        for i in ng_symbols:
+                            video_path = video_path.replace(i, '_')
+                        video_size = os.stat(track_path + '/' + video_path).st_size / 1000000
                         window['video_size'].update('{}{:.2f}{}'.format('Video downloaded - ', video_size, ' MB'),
                                                     visible=True)
                         # TODO Fix these symbols issues
                     except OSError:
                         print('Could not grab video file size, probably because of a weird symbol in filename')
                         window['video_size'].update('Video downloaded - Could not grab file size', visible=True)
+
+        # TODO MESSY
+        if event == 'Offset':
+            import subprocess
+            #tool = 'F:/Games/Beat Saber 1.8.0/Beat Saber_Data/CustomLevels'
+            tool = values['bs_folder']
+            tool = tool[0:tool.find('Beat Saber_Data')]
+            tool = tool + 'Youtube-dl/SyncVideoWithAudio/SyncVideoWithAudio.exe'
+            tool = '\"' + tool + '\"' + ' offset'
+            # tool = '"F:/Games/Beat Saber 1.8.0/Youtube-dl/SyncVideoWithAudio/SyncVideoWithAudio.exe" offset'
+            #track = ' "F:/Games/Beat Saber 1.8.0/Beat Saber_Data/CustomLevels/1ac4 (Ghosts Play to the Audience - dankruptmemer)/song.egg"'
+            #video = ' "F:/Games/Beat Saber 1.8.0/Beat Saber_Data/CustomLevels/1ac4 (Ghosts Play to the Audience - dankruptmemer)/PinocchioP - Ghosts Play to the Audience _ ピノキオピー- おばけのウケねらい.mp4"'
+            search = str(values['tracklist'])  # Chosen track
+            track_path = values['bs_folder'] + '/' + search.replace('[\'', '').replace('\']', '').replace('"]', '').replace('["', '')
+            track = ' \"' + track_path + '/' + track_json['_songFilename'] + '\"'
+            print(track)
+            video = ' \"' + track_path + '/' +  video_json['videos'][av]['videoPath'] + '\"' # TODO No ng symbol check
+            print(video)
+            a = subprocess.run(tool + track + video, shell=True, capture_output=True)
+            a = str(a)
+            print(a)
+            b = a[a.find('%') + 10:a.find('\', stderr')]
+            c = int(float(b.replace(',', '.')))
+            print(c)
 
         if event == 'bs_folder':
             browse_bs_folder()
@@ -410,6 +443,7 @@ def create_gui():
 
         if event == 'About':
             webbrowser.open('https://github.com/CuriousCod/BeatSaberTrackManager/tree/master')
+
 
     window.close()
 
