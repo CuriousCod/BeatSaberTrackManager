@@ -21,7 +21,7 @@ import subprocess
 # DONE Duration seconds are not display with double digits, if seconds are less than 10
 # DONE Download files to right folder
 # DONE Set maximum character limit for description -> Max is now 106 characters
-# TODO Make sure that .mp4 is the only output format
+# TODO Make sure that .mp4 is the only output format with 720p preferred - 6c79
 # TODO A lot of code cleaning
 # DONE Implement a decent GUI -> Maybe ok now
 # DONE Standardize folder format for searches '0000 (trackname - maker)' -> added to readme
@@ -38,10 +38,13 @@ import subprocess
 # TODO Add delete function
 # DONE Easy way for user to read error log -> Using sg.popup
 # DONE Add file size display
-# TODO video.json with 2 or more videos might cause issues
-# DONE Video titles with unsupported symbols cause issues during download * / \ : ? < > | -> Replace during display
-# DONE youtubeDL turns " into ' -> Added replace
-# TODO 2df2 crashes auto offset
+# TODO Implement proper support for multiple video files
+# DONE Video titles with unsupported symbols cause issues during download * / \ ? < > | -> Replace during display
+# DONE youtubeDL turns " into ' and : into  - -> Added replace
+# DONE 2df2 crashes auto offset -> Offset tool not very successful, added try
+# TODO Listbox chooses lowest option, if empty space clicked
+# TODO Symbols conversion is damn annoying
+# TODO Update video.json format
 
 
 # Verify if the browsed CustomLevels folder is valid and write the location to config.ini
@@ -171,7 +174,7 @@ def create_gui():
     config_bs_folder()
 
     # These symbols don't work on filenames
-    ng_symbols = ['*', '/', '\\', ':', '?', '<', '>', '|', ]
+    ng_symbols = ['*', '/', '\\', '?', '<', '>', '|', ]
 
     while True:
         event, values = window.read()
@@ -246,6 +249,8 @@ def create_gui():
                             if 'videopath' in video_json['videos'][av]:
                                 video_json['videos'][av]['videoPath'] = video_json['videos'][av]['videopath']
                                 del video_json['videos'][av]['videopath']
+
+                            #TODO Update video.json to new format
 
                             print(video_json['videos'][av]['title'])
                             print(video_json['videos'][av]['duration'])
@@ -338,7 +343,7 @@ def create_gui():
                     data_set = {'activeVideo': 0, 'videos': [
                         {'title': info['title'], 'author': info['uploader'], 'description': info['description'][0:106] + ' ...',
                          'duration': video_duration, 'URL': info['webpage_url'], 'thumbnailURL': info['thumbnail'],
-                         'loop': 'f' + 'alse', 'offset': 0, 'videoPath': info['title'].replace('\"', '\'') + '.mp4'}], 'Count': 1}
+                         'loop': 'f' + 'alse', 'offset': 0, 'videoPath': info['title'].replace('\"', '\'').replace(':', ' -') + '.mp4'}], 'Count': 1}
 
                     # video.json debug
                     print(json.dumps(data_set, ensure_ascii=False))
@@ -372,7 +377,6 @@ def create_gui():
                     #  Save video.json, encoding is utf8 otherwise there will be problems with MVP
                     with open(track_path + '/video.json', 'w', encoding='utf8') as outfile:
                         json.dump(data_set, outfile, ensure_ascii=False)
-                        outfile.close()
                     #  Download the video
                     youtube_dl.YoutubeDL({'outtmpl': track_path + '/%(title)s.%(ext)s'}).download([download])  # Outputs title + extension
                     try:
@@ -391,6 +395,7 @@ def create_gui():
                         window['video_size'].update('Video downloaded - File size not available', visible=True)
 
         # Calculate audio/video offset using the MVP's tools
+        # Success rate is not very high. Often throws Cannot find audio stream errors
         if event == 'Auto Offset':
 
             window['offset'].update('Calculating offset...', visible=True)
@@ -410,16 +415,34 @@ def create_gui():
                 offset_video = ' \"' + track_path + '/' + video_json['videos'][av]['videoPath'] + '\"'
             print(offset_video)
 
-            offset = subprocess.run(offset_tool + offset_audio + offset_video, shell=True, capture_output=True)
-            # Convert results to str and search the string for the result. There's probably an easier way for this.
-            offset = str(offset)
-            print(offset)
-            offset = offset[offset.rfind('%') + 10:offset.find(',', offset.rfind('%') + 10)]
-            print(offset)
-            offset = int(float(offset))
-            offset *= -1  # Values are flipped in video.json
-            window['offset'].update('{}{}'.format('Offset: ', offset), visible=True)
-            window['Auto Offset'].update(disabled=True)
+            try:
+                offset = subprocess.run(offset_tool + offset_audio + offset_video, shell=True, capture_output=True, check=True, timeout=15)
+                # Convert results to str and search the string for the result. There's probably an easier way for this.
+                offset = str(offset)
+                print(offset)
+                offset = offset[offset.rfind('Results: ') + 8:offset.find(',', offset.rfind('Results: '))]
+                print(offset)
+                offset = int(float(offset))
+                offset *= -1  # Values are flipped in video.json
+                window['offset'].update('{}{}'.format('Offset: ', offset), visible=True)
+                window['Auto Offset'].update(disabled=True)
+
+                with open(track_path + '/video.json', 'r+', encoding='utf8') as outfile:
+                    json_offset = json.load(outfile)
+                    if 'videos' in json_offset:
+                        json_offset['videos'][av]['offset'] = offset
+                    else:
+                        json_offset['offset'] = offset
+                    outfile.seek(0)  # Return to the beginning of the file
+                    json.dump(json_offset, outfile)
+                    outfile.truncate()  # Clean old data from file
+
+            except subprocess.CalledProcessError:
+                window['offset'].update('Could not calculate offset', visible=True)
+            except subprocess.TimeoutExpired:
+                window['offset'].update('Could not calculate offset', visible=True)
+            except ValueError:
+                window['offset'].update('Could not calculate offset', visible=True)
 
         if event == 'bs_folder':
             browse_bs_folder()
@@ -435,7 +458,8 @@ def create_gui():
                 os.startfile(track_path)
             except UnboundLocalError:
                 print('No track selected')
-                continue
+            except FileNotFoundError:
+                print('No track selected')
 
         if event == 'Select CustomLevels Folder':
             trackfolder = sg.popup_get_folder('', title='Select CustomLevels folder',
