@@ -9,5 +9,5 @@ TrackID (TrackName - TrackMaker)</br>
 
 Currently supports only one video at a time. If multiple videos are in the folder the application picks the one set as active(activeVideo) in video.json.
 
-![Preview image](https://www.dropbox.com/s/2r0v6383v56ew8b/Screenshot%202020-08-24%2002.23.31.png?raw=1)
+![Preview image](https://www.dropbox.com/s/d9teb2xio3r2nsw/Screenshot%202020-08-24%2002.26.48.png?raw=1)
 
