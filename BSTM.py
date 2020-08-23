@@ -10,8 +10,10 @@ import urllib
 from tinytag import TinyTag
 import webbrowser
 import subprocess
+import librosa
+import audioread
 
-# TODO Maybe implement best of three results ytsearch3
+# DONE Maybe implement best of three results ytsearch3 -> Not needed
 # DONE Make sure the app doesn't download 10 hour videos! -> Limit is now 1.5x duration of the track or if over 900sec
 # DONE Generate video.json
 # DONE Enable youtubedl
@@ -21,7 +23,8 @@ import subprocess
 # DONE Duration seconds are not display with double digits, if seconds are less than 10
 # DONE Download files to right folder
 # DONE Set maximum character limit for description -> Max is now 106 characters
-# TODO Make sure that .mp4 is the only output format with 720p preferred - 6c79
+# DONE Make sure that .mp4 is the only output format with 720p preferred + audio - 6c79, 360b -> Added format
+# TODO youtubeDL crashes, if 720p format is not available youtube_dl.utils.DownloadError
 # TODO A lot of code cleaning
 # DONE Implement a decent GUI -> Maybe ok now
 # DONE Standardize folder format for searches '0000 (trackname - maker)' -> added to readme
@@ -39,11 +42,10 @@ import subprocess
 # DONE Easy way for user to read error log -> Using sg.popup
 # DONE Add file size display
 # TODO Implement proper support for multiple video files
-# DONE Video titles with unsupported symbols cause issues during download * / \ ? < > | -> Replace during display
-# DONE youtubeDL turns " into ' and : into  - -> Added replace
+# DONE Video titles with unsupported symbols cause issues during download * / \ ? < > | -> Replace function
+# DONE youtubeDL turns " into ' and : into  - -> Replace function
 # DONE 2df2 crashes auto offset -> Offset tool not very successful, added try
-# TODO Listbox chooses lowest option, if empty space clicked
-# TODO Symbols conversion is damn annoying
+# DONE Listbox chooses lowest option, if empty space clicked -> Feature, not a bug
 # TODO Update video.json format
 
 
@@ -94,6 +96,7 @@ def clear_info(clear):
         window[i].update('')
 
     window['Auto Offset'].update(disabled=True)
+    window['Auto Offset Fast'].update(disabled=True)
 
 
 # Read and print the CustomLevels folder
@@ -135,6 +138,58 @@ def check_tracks():
     window.Refresh()
 
 
+def replace_symbols(filename):
+    # These symbols don't work on filenames and also ? " :
+    ng_symbols = ['*', '/', '\\', '<', '>', '|']
+
+    for i in ng_symbols:
+        filename = filename.replace(i, '_')
+
+    filename = filename.replace('?', '')
+    filename = filename.replace(':', ' -')
+    filename = filename.replace('\"', '\'')
+
+    return filename
+
+
+# Fetches and updates video.json to the newest format
+def fetch_video_json(track_path):
+
+    if Path(track_path + '/video.json').is_file():
+        with open(track_path + '/video.json', 'r+',  encoding='utf8') as f:
+            try:
+                video_json = json.load(f)
+                # Check if the json is in the new format, if not convert it
+                # Currently only the active video in the json file is grabbed
+                if 'videos' not in video_json:
+                    video_json = {'activeVideo': 0, 'videos': [video_json]}
+
+                av = video_json['activeVideo']  # Grab only the active video
+
+                # Fix lowercase key
+                if 'videopath' in video_json['videos'][av]:
+                    video_json['videos'][av]['videoPath'] = video_json['videos'][av]['videopath']
+                    del video_json['videos'][av]['videopath']
+
+                # Clean unsupported symbols from from videoPath
+                video_json['videos'][av]['videoPath'] = replace_symbols(video_json['videos'][av]['videoPath'])
+
+                # Save video.json with the changes
+                f.seek(0)  # Return to the beginning of the file
+                json.dump(video_json, f, ensure_ascii=False)
+                f.truncate()  # Clean old data from file
+
+                return video_json
+
+            #  Skip printing video info, if video.json is in weird format or empty
+            except json.decoder.JSONDecodeError:
+                print('video.json empty or not in proper format!')
+                window['video_name'].update('video.json empty or not in proper format!')
+                return False
+    else:
+        return False
+
+
 def create_gui():
     sg.theme('Dark Teal 11')
 
@@ -164,7 +219,7 @@ def create_gui():
               [sg.Input('', size=(50, 1), key='search_field')],
               [sg.Button('Search Youtube', bind_return_key=True),
                sg.Button('Download', disabled=True), sg.InputText(enable_events=True, key='bs_folder', visible=False),
-               sg.Button('Auto Offset', disabled=True)]
+               sg.Button('Auto Offset', disabled=True), sg.Button('Auto Offset Fast')]
               ]
 
     global window
@@ -172,9 +227,6 @@ def create_gui():
 
     # Check for config.ini
     config_bs_folder()
-
-    # These symbols don't work on filenames
-    ng_symbols = ['*', '/', '\\', '?', '<', '>', '|', ]
 
     while True:
         event, values = window.read()
@@ -234,60 +286,39 @@ def create_gui():
                     window['track_name_and_author'].update('info.dat empty or not in proper format!')
                     #clear_info(['cover_image', 'track_duration'])
 
-                if Path(track_path + '/video.json').is_file():
-                    with open(track_path + '/video.json', encoding='utf8') as f:
-                        try:
-                            video_json = json.load(f)
-                            # Check if the json is in the new format, if not convert it
-                            # Currently only the first video in the json file is grabbed
-                            if 'videos' not in video_json:
-                                video_json = {'activeVideo': 0, 'videos': [video_json]}
+                video_json = fetch_video_json(track_path)
+                if video_json is not False:
+                    av = video_json['activeVideo']  # Grab only the active video
 
-                            av = video_json['activeVideo']  # Grab only the active video
+                    print(video_json['videos'][av]['title'])
+                    print(video_json['videos'][av]['duration'])
+                    print(video_json['videos'][av]['thumbnailURL'])
 
-                            # Fix lowercase key
-                            if 'videopath' in video_json['videos'][av]:
-                                video_json['videos'][av]['videoPath'] = video_json['videos'][av]['videopath']
-                                del video_json['videos'][av]['videopath']
+                    # Find video thumbnail
+                    try:
+                        urllib.request.urlretrieve(video_json['videos'][av]['thumbnailURL'], 'thumbnail.png')
+                    except urllib.error.HTTPError:
+                        urllib.request.urlretrieve('https://s.ytimg.com/yts/img/no_thumbnail-vfl4t3-4R.jpg', 'thumbnail.png')
+                    img = PIL.Image.open('thumbnail.png')
+                    img.thumbnail((360, 200))
+                    img.save('thumbnail.png')
 
-                            #TODO Update video.json to new format
+                    # Update fields
+                    window['video_name'].update(video_json['videos'][av]['title'])
+                    window['video_duration'].update(video_json['videos'][av]['duration'].replace('.', ':'))
+                    window['thumbnail'].update('thumbnail.png')
+                    window['offset'].update('{}{}'.format('Offset: ', video_json['videos'][av]['offset']), visible=True)
+                    window['Auto Offset'].update(disabled=False)
+                    window['Auto Offset Fast'].update(disabled=False)
 
-                            print(video_json['videos'][av]['title'])
-                            print(video_json['videos'][av]['duration'])
-                            print(video_json['videos'][av]['thumbnailURL'])
-
-                            # Find video thumbnail
-                            try:
-                                urllib.request.urlretrieve(video_json['videos'][av]['thumbnailURL'], 'thumbnail.png')
-                            except urllib.error.HTTPError:
-                                urllib.request.urlretrieve('https://s.ytimg.com/yts/img/no_thumbnail-vfl4t3-4R.jpg', 'thumbnail.png')
-                            img = PIL.Image.open('thumbnail.png')
-                            img.thumbnail((360, 200))
-                            img.save('thumbnail.png')
-
-                            # Update fields
-                            window['video_name'].update(video_json['videos'][av]['title'])
-                            window['video_duration'].update(video_json['videos'][av]['duration'].replace('.', ':'))
-                            window['thumbnail'].update('thumbnail.png')
-                            window['offset'].update('{}{}'.format('Offset: ', video_json['videos'][av]['offset']), visible=True)
-                            window['Auto Offset'].update(disabled=False)
-
-                            # Find video in folder
-                            try:
-                                video_path = video_json['videos'][av]['videoPath']
-                                for i in ng_symbols:
-                                    video_path = video_path.replace(i, '_')
-                                video_size = os.stat(track_path + '/' + video_path).st_size / 1000000
-                                window['video_size'].update('{}{:.2f}{}'.format('Video downloaded - ', video_size, ' MB'), visible=True)
-                            except FileNotFoundError:
-                                print('Video not found!')
-                                window['video_size'].update('Video file not found in folder', visible=True)
-                            f.close()
-
-                        #  Skip printing video info, if video.json is in weird format or empty
-                        except json.decoder.JSONDecodeError:
-                            print('video.json empty or not in proper format!')
-                            window['video_name'].update('video.json empty or not in proper format!')
+                    # Find video in folder
+                    try:
+                        video_path = video_json['videos'][av]['videoPath']
+                        video_size = os.stat(track_path + '/' + video_path).st_size / 1000000
+                        window['video_size'].update('{}{:.2f}{}'.format('Video downloaded - ', video_size, ' MB'), visible=True)
+                    except FileNotFoundError:
+                        print('Video not found!')
+                        window['video_size'].update('Video file not found in folder', visible=True)
 
                 # If track contains proper info.dat, display track name and author on the search field
                 if info_dat:
@@ -339,11 +370,11 @@ def create_gui():
                     window.Refresh()
 
                     #  Build video.json, "loop":false fixed in a hacky way :D, limited description to 106 characters
-                    #  Unsupported symbols in Windows cause issues, manually replace " - > ' in videoPath
+                    #  Unsupported symbols in Windows cause issues, running function to clean those up
                     data_set = {'activeVideo': 0, 'videos': [
                         {'title': info['title'], 'author': info['uploader'], 'description': info['description'][0:106] + ' ...',
                          'duration': video_duration, 'URL': info['webpage_url'], 'thumbnailURL': info['thumbnail'],
-                         'loop': 'f' + 'alse', 'offset': 0, 'videoPath': info['title'].replace('\"', '\'').replace(':', ' -') + '.mp4'}], 'Count': 1}
+                         'loop': 'f' + 'alse', 'offset': 0, 'videoPath': replace_symbols(info['title']) + '.mp4'}], 'Count': 1}
 
                     # video.json debug
                     print(json.dumps(data_set, ensure_ascii=False))
@@ -378,15 +409,14 @@ def create_gui():
                     with open(track_path + '/video.json', 'w', encoding='utf8') as outfile:
                         json.dump(data_set, outfile, ensure_ascii=False)
                     #  Download the video
-                    youtube_dl.YoutubeDL({'outtmpl': track_path + '/%(title)s.%(ext)s'}).download([download])  # Outputs title + extension
+                    youtube_dl.YoutubeDL({'format': 'mp4[height<=720]+bestaudio[ext=m4a]', 'outtmpl': track_path + '/%(title)s.%(ext)s'}).download([download])  # Outputs title + extension
                     try:
-                        video_path = data_set['videos'][0]['videoPath']
-                        for i in ng_symbols:
-                            video_path = video_path.replace(i, '_')
+                        video_path = data_set['videos'][av]['videoPath']
                         video_size = os.stat(track_path + '/' + video_path).st_size / 1000000
                         window['video_size'].update('{}{:.2f}{}'.format('Video downloaded - ', video_size, ' MB'),
                                                     visible=True)
                         #window['Auto Offset'].update(disabled=False)  # TODO track_json not updated during download
+                        window['Auto Offset Fast'].update(disabled=False)
                         window['offset'].update('{}{}'.format('Offset: ', data_set['videos'][0]['offset']),
                                                 visible=True)
 
@@ -410,9 +440,7 @@ def create_gui():
             offset_audio = ' \"' + track_path + '/' + track_json['_songFilename'] + '\"'  # TODO track_json not updated during download
             print(offset_audio)
 
-            for i in ng_symbols:
-                video_json['videos'][av]['videoPath'].replace(i, '_')
-                offset_video = ' \"' + track_path + '/' + video_json['videos'][av]['videoPath'] + '\"'
+            offset_video = ' \"' + track_path + '/' + video_json['videos'][av]['videoPath'] + '\"'
             print(offset_video)
 
             try:
@@ -429,10 +457,8 @@ def create_gui():
 
                 with open(track_path + '/video.json', 'r+', encoding='utf8') as outfile:
                     json_offset = json.load(outfile)
-                    if 'videos' in json_offset:
-                        json_offset['videos'][av]['offset'] = offset
-                    else:
-                        json_offset['offset'] = offset
+                    json_offset['videos'][av]['offset'] = offset
+
                     outfile.seek(0)  # Return to the beginning of the file
                     json.dump(json_offset, outfile)
                     outfile.truncate()  # Clean old data from file
@@ -443,6 +469,48 @@ def create_gui():
                 window['offset'].update('Could not calculate offset', visible=True)
             except ValueError:
                 window['offset'].update('Could not calculate offset', visible=True)
+
+        if event == 'Auto Offset Fast':
+
+            search = str(values['tracklist'])  # Chosen track
+            track_path = values['bs_folder'] + '/' + search.replace('[\'', '').replace('\']', '').replace('"]', '').replace(
+                '["', '')
+
+            with open(track_path + '/info.dat', 'r', encoding='utf8') as outfile:
+                track_name = json.load(outfile)
+                track_name = track_path + '/' + track_name['_songFilename']
+            with open(track_path + '/video.json', 'r', encoding='utf8') as outfile:
+                track_video = json.load(outfile)
+                av = track_video['activeVideo']
+                track_video = track_path + '/' + track_video['videos'][av]['videoPath']
+
+            try:
+                y, sr = librosa.load(track_name, duration=8)
+                track_onset = librosa.frames_to_time(librosa.onset.onset_detect(y=y))
+
+                y, sr = librosa.load(track_video, duration=8)
+                video_onset = librosa.frames_to_time(librosa.onset.onset_detect(y=y))
+
+                print(track_onset[0] - video_onset[0])
+
+                offset = int(round((track_onset[0] - video_onset[0]) * -1, 3) * 1000)
+                print(offset)
+
+                window['offset'].update('{}{}'.format('Offset: ', offset), visible=True)
+
+                with open(track_path + '/video.json', 'r+', encoding='utf8') as outfile:
+                    json_offset = json.load(outfile)
+                    json_offset['videos'][av]['offset'] = offset
+
+                    outfile.seek(0)  # Return to the beginning of the file
+                    json.dump(json_offset, outfile)
+                    outfile.truncate()  # Clean old data from file
+
+            except audioread.exceptions.NoBackendError:
+                print('Video missing audio track.')
+
+            except IndexError:
+                print('No onset found on audio track. Analyze duration might be too low.')
 
         if event == 'bs_folder':
             browse_bs_folder()
