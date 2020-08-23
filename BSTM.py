@@ -96,7 +96,6 @@ def clear_info(clear):
         window[i].update('')
 
     window['Auto Offset'].update(disabled=True)
-    window['Auto Offset Fast'].update(disabled=True)
 
 
 # Read and print the CustomLevels folder
@@ -194,7 +193,10 @@ def create_gui():
     sg.theme('Dark Teal 11')
 
     menu_def = [['File', ['Select CustomLevels Folder', 'Exit']],
+                ['Settings', ['Use Normal Auto Offset', 'Use Fast Auto Offset            X']],
                 ['Help', 'About'], ]
+
+    menu_elem = sg.Menu(menu_def)
 
     col1 = [
         [sg.Text(size=(38,2), key='track_name_and_author')],
@@ -209,7 +211,7 @@ def create_gui():
     ]
 
     layout = [
-              [sg.Menu(menu_def)],
+              [menu_elem],
               [sg.Combo(values=('All tracks', 'Tracks without video', 'Tracks with video'),
                         default_value='All tracks', enable_events=True, key='track_filter', size=(30, 1)),
                         sg.Text('Filter'), sg.InputText(size=(10, 1), key='filter', enable_events=True)],
@@ -219,7 +221,7 @@ def create_gui():
               [sg.Input('', size=(50, 1), key='search_field')],
               [sg.Button('Search Youtube', bind_return_key=True),
                sg.Button('Download', disabled=True), sg.InputText(enable_events=True, key='bs_folder', visible=False),
-               sg.Button('Auto Offset', disabled=True), sg.Button('Auto Offset Fast')]
+               sg.Button('Auto Offset', disabled=True)]
               ]
 
     global window
@@ -227,6 +229,7 @@ def create_gui():
 
     # Check for config.ini
     config_bs_folder()
+    auto_offset = 1  # Use fast auto offset as default
 
     while True:
         event, values = window.read()
@@ -309,7 +312,6 @@ def create_gui():
                     window['thumbnail'].update('thumbnail.png')
                     window['offset'].update('{}{}'.format('Offset: ', video_json['videos'][av]['offset']), visible=True)
                     window['Auto Offset'].update(disabled=False)
-                    window['Auto Offset Fast'].update(disabled=False)
 
                     # Find video in folder
                     try:
@@ -411,12 +413,12 @@ def create_gui():
                     #  Download the video
                     youtube_dl.YoutubeDL({'format': 'mp4[height<=720]+bestaudio[ext=m4a]', 'outtmpl': track_path + '/%(title)s.%(ext)s'}).download([download])  # Outputs title + extension
                     try:
+                        av = data_set['activeVideo']
                         video_path = data_set['videos'][av]['videoPath']
                         video_size = os.stat(track_path + '/' + video_path).st_size / 1000000
                         window['video_size'].update('{}{:.2f}{}'.format('Video downloaded - ', video_size, ' MB'),
                                                     visible=True)
-                        #window['Auto Offset'].update(disabled=False)  # TODO track_json not updated during download
-                        window['Auto Offset Fast'].update(disabled=False)
+                        window['Auto Offset'].update(disabled=False)
                         window['offset'].update('{}{}'.format('Offset: ', data_set['videos'][0]['offset']),
                                                 visible=True)
 
@@ -424,93 +426,103 @@ def create_gui():
                         print('Could not grab video file size, probably because of a weird symbol in filename')
                         window['video_size'].update('Video downloaded - File size not available', visible=True)
 
-        # Calculate audio/video offset using the MVP's tools
-        # Success rate is not very high. Often throws Cannot find audio stream errors
+        # Calculate audio/video offset using MVP's tools or librosa
         if event == 'Auto Offset':
 
-            window['offset'].update('Calculating offset...', visible=True)
-            window.Refresh()
+            # Offset using MVP
+            if auto_offset == 0:
 
-            offset_tool = values['bs_folder'][0:values['bs_folder'].find('Beat Saber_Data')]
-            offset_tool = '\"' + offset_tool + 'Youtube-dl/SyncVideoWithAudio/SyncVideoWithAudio.exe' + '\"' + ' offset'
+                window['offset'].update('Calculating offset...', visible=True)
+                window.Refresh()
 
-            search = str(values['tracklist'])  # Chosen track
-            track_path = values['bs_folder'] + '/' + search.replace('[\'', '').replace('\']', '').replace('"]', '').replace('["', '')
+                offset_tool = values['bs_folder'][0:values['bs_folder'].find('Beat Saber_Data')]
+                offset_tool = '\"' + offset_tool + 'Youtube-dl/SyncVideoWithAudio/SyncVideoWithAudio.exe' + '\"' + ' offset'
 
-            offset_audio = ' \"' + track_path + '/' + track_json['_songFilename'] + '\"'  # TODO track_json not updated during download
-            print(offset_audio)
+                search = str(values['tracklist'])  # Chosen track
+                track_path = values['bs_folder'] + '/' + search.replace('[\'', '').replace('\']', '').replace('"]', '').replace('["', '')
 
-            offset_video = ' \"' + track_path + '/' + video_json['videos'][av]['videoPath'] + '\"'
-            print(offset_video)
+                with open(track_path + '/info.dat', 'r', encoding='utf8') as outfile:
+                    track_json = json.load(outfile)
+                    offset_audio = ' \"' + track_path + '/' + track_json['_songFilename'] + '\"'
+                    print(offset_audio)
 
-            try:
-                offset = subprocess.run(offset_tool + offset_audio + offset_video, shell=True, capture_output=True, check=True, timeout=15)
-                # Convert results to str and search the string for the result. There's probably an easier way for this.
-                offset = str(offset)
-                print(offset)
-                offset = offset[offset.rfind('Results: ') + 8:offset.find(',', offset.rfind('Results: '))]
-                print(offset)
-                offset = int(float(offset))
-                offset *= -1  # Values are flipped in video.json
-                window['offset'].update('{}{}'.format('Offset: ', offset), visible=True)
-                window['Auto Offset'].update(disabled=True)
+                with open(track_path + '/video.json', 'r', encoding='utf8') as outfile:
+                    video_json = json.load(outfile)
+                    av = video_json['activeVideo']
+                    offset_video = ' \"' + track_path + '/' + video_json['videos'][av]['videoPath'] + '\"'
+                    print(offset_video)
 
-                with open(track_path + '/video.json', 'r+', encoding='utf8') as outfile:
-                    json_offset = json.load(outfile)
-                    json_offset['videos'][av]['offset'] = offset
+                try:
+                    offset = subprocess.run(offset_tool + offset_audio + offset_video, shell=True, capture_output=True, check=True, timeout=15)
+                    # Convert results to str and search the string for the result. There's probably an easier way for this.
+                    offset = str(offset)
+                    print(offset)
+                    offset = offset[offset.rfind('Results: ') + 8:offset.find(',', offset.rfind('Results: '))]
+                    print(offset)
+                    offset = int(float(offset))
+                    offset *= -1  # Values are flipped in video.json
+                    window['offset'].update('{}{}'.format('Offset: ', offset), visible=True)
 
-                    outfile.seek(0)  # Return to the beginning of the file
-                    json.dump(json_offset, outfile)
-                    outfile.truncate()  # Clean old data from file
+                    with open(track_path + '/video.json', 'r+', encoding='utf8') as outfile:
+                        json_offset = json.load(outfile)
+                        json_offset['videos'][av]['offset'] = offset
 
-            except subprocess.CalledProcessError:
-                window['offset'].update('Could not calculate offset', visible=True)
-            except subprocess.TimeoutExpired:
-                window['offset'].update('Could not calculate offset', visible=True)
-            except ValueError:
-                window['offset'].update('Could not calculate offset', visible=True)
+                        outfile.seek(0)  # Return to the beginning of the file
+                        json.dump(json_offset, outfile)
+                        outfile.truncate()  # Clean old data from file
 
-        if event == 'Auto Offset Fast':
+                except subprocess.CalledProcessError:
+                    window['offset'].update('Could not calculate offset', visible=True)
+                except subprocess.TimeoutExpired:
+                    window['offset'].update('Could not calculate offset', visible=True)
+                except ValueError:
+                    window['offset'].update('Could not calculate offset', visible=True)
 
-            search = str(values['tracklist'])  # Chosen track
-            track_path = values['bs_folder'] + '/' + search.replace('[\'', '').replace('\']', '').replace('"]', '').replace(
-                '["', '')
+            # Offset with librosa, usually faster
+            elif auto_offset == 1:
 
-            with open(track_path + '/info.dat', 'r', encoding='utf8') as outfile:
-                track_name = json.load(outfile)
-                track_name = track_path + '/' + track_name['_songFilename']
-            with open(track_path + '/video.json', 'r', encoding='utf8') as outfile:
-                track_video = json.load(outfile)
-                av = track_video['activeVideo']
-                track_video = track_path + '/' + track_video['videos'][av]['videoPath']
+                search = str(values['tracklist'])  # Chosen track
+                track_path = values['bs_folder'] + '/' + search.replace('[\'', '').replace('\']', '').replace('"]',
+                                                                                                              '').replace(
+                    '["', '')
 
-            try:
-                y, sr = librosa.load(track_name, duration=8)
-                track_onset = librosa.frames_to_time(librosa.onset.onset_detect(y=y))
+                with open(track_path + '/info.dat', 'r', encoding='utf8') as outfile:
+                    track_name = json.load(outfile)
+                    track_name = track_path + '/' + track_name['_songFilename']
+                with open(track_path + '/video.json', 'r', encoding='utf8') as outfile:
+                    track_video = json.load(outfile)
+                    av = track_video['activeVideo']
+                    track_video = track_path + '/' + track_video['videos'][av]['videoPath']
 
-                y, sr = librosa.load(track_video, duration=8)
-                video_onset = librosa.frames_to_time(librosa.onset.onset_detect(y=y))
+                try:
+                    y, sr = librosa.load(track_name, duration=8)
+                    track_onset = librosa.frames_to_time(librosa.onset.onset_detect(y=y))
 
-                print(track_onset[0] - video_onset[0])
+                    y, sr = librosa.load(track_video, duration=8)
+                    video_onset = librosa.frames_to_time(librosa.onset.onset_detect(y=y))
 
-                offset = int(round((track_onset[0] - video_onset[0]) * -1, 3) * 1000)
-                print(offset)
+                    print(track_onset[0] - video_onset[0])
 
-                window['offset'].update('{}{}'.format('Offset: ', offset), visible=True)
+                    offset = int(round((track_onset[0] - video_onset[0]) * -1, 3) * 1000)
+                    print(offset)
 
-                with open(track_path + '/video.json', 'r+', encoding='utf8') as outfile:
-                    json_offset = json.load(outfile)
-                    json_offset['videos'][av]['offset'] = offset
+                    window['offset'].update('{}{}'.format('Offset: ', offset), visible=True)
 
-                    outfile.seek(0)  # Return to the beginning of the file
-                    json.dump(json_offset, outfile)
-                    outfile.truncate()  # Clean old data from file
+                    with open(track_path + '/video.json', 'r+', encoding='utf8') as outfile:
+                        json_offset = json.load(outfile)
+                        json_offset['videos'][av]['offset'] = offset
 
-            except audioread.exceptions.NoBackendError:
-                print('Video missing audio track.')
+                        outfile.seek(0)  # Return to the beginning of the file
+                        json.dump(json_offset, outfile)
+                        outfile.truncate()  # Clean old data from file
 
-            except IndexError:
-                print('No onset found on audio track. Analyze duration might be too low.')
+                except audioread.exceptions.NoBackendError:
+                    print('Video missing audio track.')
+                    window['offset'].update('Video has no audio track.', visible=True)
+
+                except IndexError:
+                    print('No onset found on audio track. Onset analyze duration might be too low.')
+                    window['offset'].update('No audio found.', visible=True)
 
         if event == 'bs_folder':
             browse_bs_folder()
@@ -563,6 +575,20 @@ def create_gui():
                         results.append(i)
                 window['tracklist'].update(results)
                 window.Refresh()
+
+        if event == 'Use Normal Auto Offset':
+            auto_offset = 0
+            menu_def = [['File', ['Select CustomLevels Folder', 'Exit']],
+                        ['Settings', ['Use Normal Auto Offset     X', 'Use Fast Auto Offset']],
+                        ['Help', 'About'], ]
+            menu_elem.Update(menu_def)
+
+        if event == 'Use Fast Auto Offset':
+            auto_offset = 1
+            menu_def = [['File', ['Select CustomLevels Folder', 'Exit']],
+                        ['Settings', ['Use Normal Auto Offset', 'Use Fast Auto Offset            X']],
+                        ['Help', 'About'], ]
+            menu_elem.Update(menu_def)
 
         if event == 'About':
             webbrowser.open('https://github.com/CuriousCod/BeatSaberTrackManager/tree/master')
