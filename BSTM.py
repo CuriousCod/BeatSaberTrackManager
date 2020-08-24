@@ -547,7 +547,7 @@ def create_gui():
             if not trackfolder:
                 print('No folder selected!')
             else:
-                clear_info()
+                clear_info('')
                 window['bs_folder'].update(trackfolder)
                 browse_bs_folder()
 
