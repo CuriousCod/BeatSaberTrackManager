@@ -1,5 +1,5 @@
 # BeatSaberTrackManager
-Lists all downloaded custom tracks and allows downloading videos for the MVP(https://github.com/rie-kumar/MusicVideoPlayer) mod without booting up Beat Saber. MVP video.json file generation and auto offset are included. Application is currently adjusted for the v1.10.0 mod version.
+Lists all downloaded custom tracks and allows downloading videos for the MVP(https://github.com/rie-kumar/MusicVideoPlayer) mod without booting up Beat Saber. MVP video.json file generation and auto offset are included. Application is currently adjusted for the MVP v1.10.0 version. ffmpeg is required for the fast auto offset.
 
 To display tracks choose File -> Select CustomLevels Folder -> Choose your CustomLevels folder
 
@@ -9,5 +9,5 @@ TrackID (TrackName - TrackMaker)</br>
 
 Currently supports only one video at a time. If multiple videos are in the folder the application picks the one set as active(activeVideo) in video.json.
 
-![Preview image](https://www.dropbox.com/s/e9zyu6kwbaf0uhi/screenshot%202020-08-15%2018.38.50.png?raw=1)
+![Preview image](https://www.dropbox.com/s/d9teb2xio3r2nsw/Screenshot%202020-08-24%2002.26.48.png?raw=1)
 
