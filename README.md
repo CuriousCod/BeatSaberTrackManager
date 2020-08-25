@@ -10,10 +10,11 @@ Lists all downloaded custom tracks and allows downloading videos for the MVP(htt
 <h3>Notes:</h3>
 
 - Application is currently adjusted for the MVP v1.10.0 version.
+- You can right click a track to quickly access the track's folder
 - Auto offset has two options: fast and normal
   - Normal is the same the one in MVP mod
   - Fast uses Python to quickly find the offset by comparing the audio onsets
-    - ffmpeg is required for the fast auto offset. You can right click a track to quickly access the track's folder
+    - ffmpeg is required for the fast auto offset
 - Custom track folder naming should follow the same format as when downloaded with the More Songs mod:</br>
   - TrackID (TrackName - TrackMaker)</br>
   - 8149 (Great Days - Joetastic)
