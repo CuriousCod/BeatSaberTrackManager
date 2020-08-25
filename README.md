@@ -5,7 +5,7 @@ Lists all downloaded custom tracks and allows downloading videos for the MVP (ht
 
 - Unzip release => run BSTM.exe
 - To display tracks choose File => Select CustomLevels Folder => Choose your CustomLevels folder
-- If you want to use fast auto offset, add a copy of ffmpeg.exe to the same folder as BSTM.exe
+- If you want to use fast auto offset (on by default), add a copy of ffmpeg.exe to the same folder as BSTM.exe
 
 <h3>Notes:</h3>
 
@@ -26,7 +26,7 @@ Lists all downloaded custom tracks and allows downloading videos for the MVP (ht
 - Coded in Python using pyCharm
 - Videos are downloaded with youtube-dl (https://youtube-dl.org)
 - GUI implemented with PySimpleGUI (https://pysimplegui.readthedocs.io/en/latest/)
-- Fast Auto Offset implemented with librosa (https://librosa.org/doc/latest/index.html)
+- Fast auto offset implemented with librosa (https://librosa.org/doc/latest/index.html)
 - .exe created using PyInstaller
 - Also using various other libraries for smaller tasks
 
