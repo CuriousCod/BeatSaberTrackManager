@@ -9,7 +9,7 @@ Lists all downloaded custom tracks and allows downloading videos for the MVP (ht
 
 <h3>Notes:</h3>
 
-- Application is currently adjusted for the MVP v1.10.0 version.
+- Application is currently adjusted for the MVP v1.10.0 version
 - You can right click a track to quickly access the track's folder
 - Auto offset has two options: fast and normal
   - Normal is the same the one in MVP mod
