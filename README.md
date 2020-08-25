@@ -12,7 +12,7 @@ Lists all downloaded custom tracks and allows downloading videos for the MVP (ht
 - Application is currently adjusted for the MVP v1.10.0 version
 - You can right click a track to quickly access the track's folder
 - Auto offset has two options: fast and normal
-  - Normal is the same the one in MVP mod
+  - Normal uses the same software as the one in MVP mod
     - Requires SyncVideoWithAudio.exe to be in \Beat Saber Folder\Youtube-dl\SyncVideoWithAudio
   - Fast uses Python to quickly find the offset by comparing the audio onsets
     - ffmpeg is required for the fast auto offset
