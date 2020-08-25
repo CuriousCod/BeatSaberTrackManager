@@ -2,11 +2,13 @@
 Lists all downloaded custom tracks and allows downloading videos for the MVP(https://github.com/rie-kumar/MusicVideoPlayer) mod without booting up Beat Saber. MVP video.json file generation and auto offset are included.
 
 <h3>Installation:</h3>
+
 - Unzip release, run BSTM.exe
-- To display tracks choose File -> Select CustomLevels Folder -> Choose your CustomLevels folder
+- To display tracks choose File, Select CustomLevels Folder, Choose your CustomLevels folder
 - If you want to use fast auto offset, add a copy of ffmpeg.exe to the same folder as BSTM.exe.
 
 <h3>Notes:</h3>
+
 - Application is currently adjusted for the MVP v1.10.0 version. 
 - Auto offset has two options: fast and normal
   - Normal is the same the one in MVP mod
@@ -18,6 +20,7 @@ Lists all downloaded custom tracks and allows downloading videos for the MVP(htt
 - Applicaton currently supports only one video at a time. If multiple videos are in the folder the application picks the one set as active(activeVideo) in video.json.
 
 <h3>Developed with:</h3>
+
 - Coded in Python using pyCharm.
 - Videos are downloaded with youtube-dl (https://youtube-dl.org)
 - GUI implemented with PySimpleGUI (https://pysimplegui.readthedocs.io/en/latest/)
