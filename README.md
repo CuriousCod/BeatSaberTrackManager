@@ -19,6 +19,7 @@ Lists all downloaded custom tracks and allows downloading videos for the MVP (ht
   - TrackID (TrackName - TrackMaker)</br>
   - 8149 (Great Days - Joetastic)
 - Applicaton currently supports only one video at a time. If multiple videos are in the folder, the application picks the one set as active (activeVideo) in video.json
+- If you encounter any bugs or have feature requests, create a new issue please
 
 <h3>Developed with:</h3>
 
