@@ -3,8 +3,8 @@ Lists all downloaded custom tracks and allows downloading videos for the MVP (ht
 
 <h3>Installation:</h3>
 
-- Unzip release, run BSTM.exe
-- To display tracks choose File, Select CustomLevels Folder, Choose your CustomLevels folder
+- Unzip release => run BSTM.exe
+- To display tracks choose File => Select CustomLevels Folder => Choose your CustomLevels folder
 - If you want to use fast auto offset, add a copy of ffmpeg.exe to the same folder as BSTM.exe
 
 <h3>Notes:</h3>
