@@ -1,5 +1,5 @@
 # BeatSaberTrackManager
-Lists all downloaded custom tracks and allows downloading videos for the MVP(https://github.com/rie-kumar/MusicVideoPlayer) mod without booting up Beat Saber. MVP video.json file generation and auto offset feature are included.
+Lists all downloaded custom tracks and allows downloading videos for the MVP (https://github.com/rie-kumar/MusicVideoPlayer) mod without booting up Beat Saber. MVP video.json file generation and auto offset feature are included.
 
 <h3>Installation:</h3>
 
@@ -18,14 +18,14 @@ Lists all downloaded custom tracks and allows downloading videos for the MVP(htt
 - Custom track folder naming should follow the same format as when downloaded with the More Songs mod:</br>
   - TrackID (TrackName - TrackMaker)</br>
   - 8149 (Great Days - Joetastic)
-- Applicaton currently supports only one video at a time. If multiple videos are in the folder the application picks the one set as active(activeVideo) in video.json
+- Applicaton currently supports only one video at a time. If multiple videos are in the folder, the application picks the one set as active (activeVideo) in video.json
 
 <h3>Developed with:</h3>
 
 - Coded in Python using pyCharm
 - Videos are downloaded with youtube-dl (https://youtube-dl.org)
 - GUI implemented with PySimpleGUI (https://pysimplegui.readthedocs.io/en/latest/)
-- Auto Offset implemented with librosa (https://librosa.org/doc/latest/index.html)
+- Fast Auto Offset implemented with librosa (https://librosa.org/doc/latest/index.html)
 - .exe created using PyInstaller
 - Also using various other libraries for smaller tasks
 
