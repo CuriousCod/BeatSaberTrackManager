@@ -9,6 +9,10 @@ Lists all downloaded custom tracks and allows downloading videos for the MVP (ht
 
 <h3>Notes:</h3>
 
+- Video is downloaded with the following video/audio arguments: mp4[height<=720]+bestaudio[ext=m4a]
+  - Audio is downloaded for the offset feature
+- Video and audio won't be merged to mkv, since MVP doesn't support mkv files and re-encoding has not been implemented
+  - This means that in some rare cases the quality of the downloaded mp4 will be low, if there's no high resolution version of it available with m4a audio
 - Application is currently adjusted for the MVP v1.10.0 version
 - You can right click a track to quickly access the track's folder
 - Auto offset has two options: fast and normal
