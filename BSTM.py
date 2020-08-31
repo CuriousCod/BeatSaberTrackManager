@@ -24,7 +24,6 @@ import audioread
 # DONE Download files to right folder
 # DONE Set maximum character limit for description -> Max is now 106 characters
 # DONE Make sure that .mp4 is the only output format with 720p preferred + audio - 6c79, 360b -> Added format
-# TODO youtubeDL crashes, if 720p format is not available youtube_dl.utils.DownloadError
 # TODO A lot of code cleaning
 # DONE Implement a decent GUI -> Maybe ok now
 # DONE Standardize folder format for searches '0000 (trackname - maker)' -> added to readme
@@ -46,7 +45,8 @@ import audioread
 # DONE youtubeDL turns " into ' and : into  - -> Replace function
 # DONE 2df2 crashes auto offset -> Offset tool not very successful, added try
 # DONE Listbox chooses lowest option, if empty space clicked -> Feature, not a bug
-# TODO Update video.json format
+# TODO Update video.json format, Count + others keys missing, thumbnail url is not shortened
+# TODO Maybe: Download audio and video separately, use audio for offset and add key for audio file in video.json
 
 
 # Verify if the browsed CustomLevels folder is valid and write the location to config.ini
@@ -276,9 +276,9 @@ def create_gui():
                 #  Reset fields and set duration to 600 seconds, if info.dat is not found
                 except FileNotFoundError:
                     info_dat = False
-                    print('Missing info.dat file!')
+                    print('Missing info.dat or cover image!')
                     track_seconds = 600
-                    window['track_name_and_author'].update('info.dat missing!')
+                    window['track_name_and_author'].update('info.dat or cover image missing!')
                     #clear_info(['cover_image', 'track_duration'])
 
                 #  Reset fields and set duration to 600 seconds, if info.dat is in weird format or empty
@@ -362,6 +362,9 @@ def create_gui():
                     video_duration = str(int(info['duration'] / 60))
                     video_duration = video_duration + ':' + str(info['duration'] % 60).zfill(2)
 
+                    # Shorten webpage url
+                    webpage_url = info['webpage_url'][info['webpage_url'].find('/watch'):-1]
+
                     urllib.request.urlretrieve(info['thumbnail'], 'thumbnail.png')
                     img = PIL.Image.open('thumbnail.png')
                     img = img.resize((360, 200))
@@ -375,7 +378,7 @@ def create_gui():
                     #  Unsupported symbols in Windows cause issues, running function to clean those up
                     data_set = {'activeVideo': 0, 'videos': [
                         {'title': info['title'], 'author': info['uploader'], 'description': info['description'][0:106] + ' ...',
-                         'duration': video_duration, 'URL': info['webpage_url'], 'thumbnailURL': info['thumbnail'],
+                         'duration': video_duration, 'URL': webpage_url, 'thumbnailURL': info['thumbnail'],
                          'loop': 'f' + 'alse', 'offset': 0, 'videoPath': replace_symbols(info['title']) + '.mp4'}], 'Count': 1}
 
                     # video.json debug
@@ -468,7 +471,7 @@ def create_gui():
                         json_offset['videos'][av]['offset'] = offset
 
                         outfile.seek(0)  # Return to the beginning of the file
-                        json.dump(json_offset, outfile)
+                        json.dump(json_offset, outfile, ensure_ascii=False)
                         outfile.truncate()  # Clean old data from file
 
                 except subprocess.CalledProcessError:
@@ -513,7 +516,7 @@ def create_gui():
                         json_offset['videos'][av]['offset'] = offset
 
                         outfile.seek(0)  # Return to the beginning of the file
-                        json.dump(json_offset, outfile)
+                        json.dump(json_offset, outfile, ensure_ascii=False)
                         outfile.truncate()  # Clean old data from file
 
                 except audioread.exceptions.NoBackendError:
