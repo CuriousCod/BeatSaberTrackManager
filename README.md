@@ -17,7 +17,7 @@ An application to complement the MVP mod (https://github.com/rie-kumar/MusicVide
 - You can right click a track to quickly access the track's folder
 - Auto offset has two options: fast and normal
   - Normal uses the same software as the one in MVP mod
-    - Requires SyncVideoWithAudio.exe to be in \Beat Saber Folder\Youtube-dl\SyncVideoWithAudio
+    - Requires SyncVideoWithAudio.exe to be in \Beat Saber Folder\Youtube-dl\SyncVideoWithAudio\
   - Fast uses Python to quickly find the offset by comparing the audio onsets
     - ffmpeg is required for the fast auto offset
 - Custom track folder naming should follow the same format as when downloaded with the More Songs mod:</br>
