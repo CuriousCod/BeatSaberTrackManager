@@ -1,5 +1,5 @@
 # BeatSaberTrackManager
-Lists all downloaded custom tracks and allows downloading videos for the MVP (https://github.com/rie-kumar/MusicVideoPlayer) mod without booting up Beat Saber. MVP video.json file generation and auto offset feature are included.
+An application to complement the MVP mod (https://github.com/rie-kumar/MusicVideoPlayer) for Beat Saber. Lists all downloaded custom tracks and allows downloading videos for the MVP mod without booting up Beat Saber. MVP video.json file generation and auto offset features are included.
 
 <h3>Installation:</h3>
 
