@@ -29,7 +29,7 @@ import cv2
 # DONE Implement a decent GUI -> Maybe ok now
 # DONE Standardize folder format for searches '0000 (trackname - maker)' -> added to readme
 # DONE Extra - symbols in folder names are an issue -> Using rfind now to find the last - symbol
-# TODO Web interface?
+# TODO Web interface? Will probably cause issues
 # DONE Get rid of the txt files
 # DONE Clean images from the folder after closing
 # DONE Exception video.json exists, but is empty -> Added try
@@ -49,6 +49,7 @@ import cv2
 # TODO Update video.json format for the next MVP version
 # TODO Bad url in video.json crashes app, probably a lot more exceptions than just this
 # DONE Download audio and video separately -> Fixed by always merging mp4 with m4a
+
 
 # Verify if the browsed CustomLevels folder is valid and write the location to config.ini
 def browse_bs_folder():
@@ -91,7 +92,8 @@ def config_bs_folder():
 def clear_info(clear):
 
     if not clear:
-        clear = ['track_name_and_author', 'track_duration', 'cover_image', 'video_name', 'video_duration', 'thumbnail', 'video_size', 'offset']
+        clear = ['track_name_and_author', 'track_duration', 'cover_image', 'video_name', 'video_duration', 'thumbnail',
+                 'video_size', 'offset']
 
     for i in clear:
         window[i].update('')
@@ -128,7 +130,6 @@ def check_tracks():
             window['tracklist'].update(both_video)
         elif values['track_filter'] == 'Tracks without video':
             window['tracklist'].update(no_video)
-            #window['tracklist'].update(text_color='green')  # TODO this doesn't work
         elif values['track_filter'] == 'Tracks with video':
             window['tracklist'].update(yes_video)
     except OSError:
@@ -136,6 +137,7 @@ def check_tracks():
         sg.popup('CustomLevels folder is not valid.\nPlease select the CustomLevels folder from the file menu.')
 
     window.Refresh()
+
 
 # Replace unsupported symbols from file names, uses same logic as youtubeDl
 def replace_symbols(filename):
@@ -188,6 +190,7 @@ def fetch_video_json(track_path):
                 return False
     else:
         return False
+
 
 # Updates track information when a track is selected from the list
 def tracklist():
@@ -301,10 +304,15 @@ def tracklist():
         window['Download'].update(disabled=True)
         window.Refresh()
 
+
 # Run search with the search term, only grabs the 1st result
 def search_youtube():
     event, values = window.read(timeout=0)
     clear_info(['video_size', 'offset'])
+
+    global info
+    global video_path
+    global data_set
 
     if not values['search_field']:
         print('Search field empty!')
@@ -316,7 +324,6 @@ def search_youtube():
         try:
             ydl = youtube_dl.YoutubeDL({'outtmpl': '%(id)s.%(ext)s'})
 
-            global info
             info = ydl.extract_info('ytsearch:' + values['search_field'], download=False, ie_key='YoutubeSearch')
             info = info['entries'][0]  # Grab only the first entry, in case the result is a playlist
             # Print out the extracted video information for debug purposes
@@ -347,18 +354,15 @@ def search_youtube():
 
             #  Build video.json, "loop":false fixed in a hacky way :D, limited description to 106 characters
             #  Unsupported symbols in Windows cause issues, running function to clean those up
-            global video_path
             video_path = replace_symbols(info['title'])
 
             # Remove everything from thumbnail url starting from ? symbol
             thumbnail_url = info['thumbnail']
-            print(thumbnail_url)
             if thumbnail_url.find('?') != -1:
                 thumbnail_url = thumbnail_url[0:thumbnail_url.find('?')]
                 print(thumbnail_url)
 
             # Dataset for video.json
-            global data_set
             data_set = {'activeVideo': 0, 'videos': [
                 {'title': info['title'], 'author': info['uploader'],
                  'description': info['description'][0:106] + ' ...',
@@ -395,8 +399,13 @@ def download_video():
         print('No video selected!')
     else:
         # Delete previous video
-        if video_exists:
-            os.remove(track_path + '/' + data_set['videos'][av]["videoPath"])
+        try:
+            if video_exists:
+                os.remove(track_path + '/' + data_set['videos'][av]["videoPath"])
+        except FileNotFoundError:
+            print('Could not delete previous video.')
+            sg.popup('Could not delete previous video.\nPlease delete it manually from the folder.')
+
         download = info['webpage_url']
         print(download)
         #  Display warning, if video is 1.5 times longer than the bs track
@@ -547,9 +556,12 @@ def run_auto_offset(auto_offset):
             print('No onset found on audio track. Onset analyze duration might be too low.')
             window['offset'].update('No audio found.', visible=True)
 
+        except FileNotFoundError:
+            print('No video found!.')
+            window['offset'].update('No video found.', visible=True)
 
 # GUI loop
-def create_gui():
+def create_GUI():
     sg.theme('Dark Teal 11')
 
     menu_def = [['File', ['Select CustomLevels Folder', 'Exit']],
@@ -699,4 +711,4 @@ def create_gui():
     window.close()
 
 
-create_gui()
+create_GUI()
