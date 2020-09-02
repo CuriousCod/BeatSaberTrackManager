@@ -9,12 +9,11 @@ An application to complement the MVP mod (https://github.com/rie-kumar/MusicVide
 
 <h3>Notes:</h3>
 
-- Video is downloaded with the following video/audio arguments: mp4[height<=720]+bestaudio[ext=m4a]
+- Video is downloaded with the following video/audio arguments: mp4[height>=480][height<1080]+bestaudio[ext=m4a]
   - Audio is required for the auto offset feature
-- Video and audio won't be merged to mkv, since MVP doesn't support mkv files and re-encoding has not been implemented
-  - This means that in some rare cases the quality of the downloaded mp4 will be low, if there's no high resolution version of it available with m4a audio
 - Application is currently adjusted for the MVP v1.10.0 version
 - You can right click a track to quickly access the track's folder
+  - You can also access the Automate command, which runs combined search + download + auto offset
 - Auto offset has two options: fast and normal
   - Normal uses the same software as the one in MVP mod
     - Requires SyncVideoWithAudio.exe to be in \Beat Saber Folder\Youtube-dl\SyncVideoWithAudio\
