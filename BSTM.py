@@ -12,6 +12,7 @@ import webbrowser
 import subprocess
 import librosa
 import audioread
+import cv2
 
 # DONE Maybe implement best of three results ytsearch3 -> Not needed
 # DONE Make sure the app doesn't download 10 hour videos! -> Limit is now 1.5x duration of the track or if over 900sec
@@ -46,8 +47,8 @@ import audioread
 # DONE 2df2 crashes auto offset -> Offset tool not very successful, added try
 # DONE Listbox chooses lowest option, if empty space clicked -> Feature, not a bug
 # TODO Update video.json format, Count + others keys missing, thumbnail url is not shortened
+# TODO Bad url in video.json crashes app
 # TODO Maybe: Download audio and video separately, use audio for offset and add key for audio file in video.json
-
 
 # Verify if the browsed CustomLevels folder is valid and write the location to config.ini
 def browse_bs_folder():
@@ -189,6 +190,246 @@ def fetch_video_json(track_path):
         return False
 
 
+# Run search with the search term, only grabs the 1st result
+def search_youtube():
+    event, values = window.read(timeout=0)
+    clear_info(['video_size', 'offset'])
+
+    if not values['search_field']:
+        print('Search field empty!')
+        sg.popup('Please input a search term.\n')
+    elif not values['tracklist']:
+        print('No track selected!')
+        sg.popup('Please select a track from the list.\n')
+    else:
+        try:
+            ydl = youtube_dl.YoutubeDL({'outtmpl': '%(id)s.%(ext)s'})
+
+            global info
+            info = ydl.extract_info('ytsearch:' + values['search_field'], download=False, ie_key='YoutubeSearch')
+            info = info['entries'][0]  # Grab only the first entry, in case the result is a playlist
+            # Print out the extracted video information for debug purposes
+            print(info)
+            print(info['title'])
+            print(info['uploader'])
+            # print(info['description'])
+            print(info['duration'])  # Printed in seconds, convert this
+            print(info['webpage_url'])
+            print(info['thumbnail'])
+
+            # Convert duration into mm:ss
+            # Youtube seems to be off by a second from youtubedl, good enough I guess
+            video_duration = str(int(info['duration'] / 60))
+            video_duration = video_duration + ':' + str(info['duration'] % 60).zfill(2)
+
+            # Shorten webpage url
+            webpage_url = info['webpage_url'][info['webpage_url'].find('/watch'):-1]
+
+            urllib.request.urlretrieve(info['thumbnail'], 'thumbnail.png')
+            img = PIL.Image.open('thumbnail.png')
+            img = img.resize((360, 200))
+            img.save('thumbnail.png')
+            window['thumbnail'].update('thumbnail.png')
+            window['video_name'].update(info['title'])
+            window['video_duration'].update(video_duration)
+            window.Refresh()
+
+            #  Build video.json, "loop":false fixed in a hacky way :D, limited description to 106 characters
+            #  Unsupported symbols in Windows cause issues, running function to clean those up
+            global video_path
+            video_path = replace_symbols(info['title'])
+
+            global data_set
+            data_set = {'activeVideo': 0, 'videos': [
+                {'title': info['title'], 'author': info['uploader'],
+                 'description': info['description'][0:106] + ' ...',
+                 'duration': video_duration, 'URL': webpage_url, 'thumbnailURL': info['thumbnail'],
+                 'loop': 'f' + 'alse', 'offset': 0, 'videoPath': video_path + '.mp4'}],
+                        'Count': 1}
+
+            # video.json debug
+            print(json.dumps(data_set, ensure_ascii=False))
+
+            window['Download'].update(disabled=False)
+
+            # TODO Fix file size grab and add resolution information
+            # print(info)
+            # video_size = int(info['formats'][0]['filesize']) #/ 1000000
+            # window['video_size'].update('{:.2f}{}'.format(video_size, ' MB'), visible=True)
+            window.Refresh()
+
+            return True
+
+        except youtube_dl.utils.DownloadError:
+            print('No video found or unable to download video!')
+            sg.popup('No video found or unable to download video\n')
+            return False
+
+#  Download the video, when download button is pressed
+def download_video(video_exists, track_path, track_seconds):
+    event, values = window.read(timeout=0)
+    av = data_set['activeVideo']
+
+    if not values['tracklist']:
+        print('No track selected!')
+    elif not info:
+        print('No video selected!')
+    else:
+        # Delete previous video
+        if video_exists:
+            os.remove(track_path + '/' + data_set['videos'][av]["videoPath"])
+        download = info['webpage_url']
+        print(download)
+        #  Display warning, if video is 1.5 times longer than the bs track
+        #  If info.dat is missing, the limit is 900 seconds
+        if info['duration'] > track_seconds * 1.5:
+            print('Video is way longer than the track!')
+            window['video_size'].update('Video is way longer than the track.', visible=True)
+            window.Refresh()
+            return False
+        else:
+            # Save video.json, encoding in utf8, otherwise there will be problems with MVP
+            with open(track_path + '/video.json', 'w', encoding='utf8') as outfile:
+                json.dump(data_set, outfile, ensure_ascii=False)
+            # Download the video
+            # TODO See if there is a way to overwrite previous video
+            try:
+                youtube_dl.YoutubeDL({'format': 'mp4[height>=480][height<1080]+bestaudio[ext=m4a]',
+                                      'outtmpl': track_path + '/%(title)s.%(ext)s'}).download(
+                    [download])  # Outputs title + extension
+            except youtube_dl.utils.DownloadError:
+                print('Unable to download video format, lowering requirements.')
+                youtube_dl.YoutubeDL({'format': 'mp4[height<=720]+bestaudio[ext=m4a]',
+                                      'outtmpl': track_path + '/%(title)s.%(ext)s'}).download(
+                    [download])
+            try:
+                av = data_set['activeVideo']
+
+                video_path = data_set['videos'][av]['videoPath']
+                video_size = os.stat(track_path + '/' + video_path).st_size / 1000000
+
+                cv2video = cv2.VideoCapture(track_path + '/' + video_path)
+                video_height = cv2video.get(cv2.CAP_PROP_FRAME_HEIGHT)
+                cv2.VideoCapture.release(cv2video)
+
+                window['video_size'].update(
+                    '{}{:.2f}{}{:.0f}p'.format('Video downloaded - ', video_size, ' MB - ', video_height),
+                    visible=True)
+                window['Auto Offset'].update(disabled=False)
+                window['offset'].update('{}{}'.format('Offset: ', data_set['videos'][0]['offset']),
+                                        visible=True)
+                return True
+
+            except OSError:
+                print('Could not grab video file size, probably because of a weird symbol in filename')
+                window['video_size'].update('Video downloaded - File size not available', visible=True)
+                return True
+
+
+# Calculate audio/video offset using MVP's tools or librosa
+def run_auto_offset(auto_offset):
+    event, values = window.read(timeout=0)
+
+    # Offset using MVP
+    if auto_offset == 0:
+
+        window['offset'].update('Calculating offset...', visible=True)
+        window.Refresh()
+
+        offset_tool = values['bs_folder'][0:values['bs_folder'].find('Beat Saber_Data')]
+        offset_tool = '\"' + offset_tool + 'Youtube-dl/SyncVideoWithAudio/SyncVideoWithAudio.exe' + '\"' + ' offset'
+
+        search = str(values['tracklist'])  # Chosen track
+        track_path = values['bs_folder'] + '/' + search.replace('[\'', '').replace('\']', '').replace('"]',
+                                                                                                      '').replace(
+            '["', '')
+
+        with open(track_path + '/info.dat', 'r', encoding='utf8') as outfile:
+            track_json = json.load(outfile)
+            offset_audio = ' \"' + track_path + '/' + track_json['_songFilename'] + '\"'
+            print(offset_audio)
+
+        with open(track_path + '/video.json', 'r', encoding='utf8') as outfile:
+            video_json = json.load(outfile)
+            av = video_json['activeVideo']
+            offset_video = ' \"' + track_path + '/' + video_json['videos'][av]['videoPath'] + '\"'
+            print(offset_video)
+
+        try:
+            offset = subprocess.run(offset_tool + offset_audio + offset_video, shell=True, capture_output=True,
+                                    check=True, timeout=15)
+            # Convert results to str and search the string for the result. There's probably an easier way for this.
+            offset = str(offset)
+            print(offset)
+            offset = offset[offset.rfind('Results: ') + 8:offset.find(',', offset.rfind('Results: '))]
+            print(offset)
+            offset = int(float(offset))
+            offset *= -1  # Values are flipped in video.json
+            window['offset'].update('{}{}'.format('Offset: ', offset), visible=True)
+
+            with open(track_path + '/video.json', 'r+', encoding='utf8') as outfile:
+                json_offset = json.load(outfile)
+                json_offset['videos'][av]['offset'] = offset
+
+                outfile.seek(0)  # Return to the beginning of the file
+                json.dump(json_offset, outfile, ensure_ascii=False)
+                outfile.truncate()  # Clean old data from file
+
+        except subprocess.CalledProcessError:
+            window['offset'].update('Could not calculate offset', visible=True)
+        except subprocess.TimeoutExpired:
+            window['offset'].update('Could not calculate offset', visible=True)
+        except ValueError:
+            window['offset'].update('Could not calculate offset', visible=True)
+
+    # Offset with librosa, usually faster
+    elif auto_offset == 1:
+
+        search = str(values['tracklist'])  # Chosen track
+        track_path = values['bs_folder'] + '/' + search.replace('[\'', '').replace('\']', '').replace('"]',
+                                                                                                      '').replace(
+            '["', '')
+
+        with open(track_path + '/info.dat', 'r', encoding='utf8') as outfile:
+            track_name = json.load(outfile)
+            track_name = track_path + '/' + track_name['_songFilename']
+        with open(track_path + '/video.json', 'r', encoding='utf8') as outfile:
+            track_video = json.load(outfile)
+            av = track_video['activeVideo']
+            track_video = track_path + '/' + track_video['videos'][av]['videoPath']
+
+        try:
+            y, sr = librosa.load(track_name, duration=8)
+            track_onset = librosa.frames_to_time(librosa.onset.onset_detect(y=y))
+
+            y, sr = librosa.load(track_video, duration=8)
+            video_onset = librosa.frames_to_time(librosa.onset.onset_detect(y=y))
+
+            print(track_onset[0] - video_onset[0])
+
+            offset = int(round((track_onset[0] - video_onset[0]) * -1, 3) * 1000)
+            print(offset)
+
+            window['offset'].update('{}{}'.format('Offset: ', offset), visible=True)
+
+            with open(track_path + '/video.json', 'r+', encoding='utf8') as outfile:
+                json_offset = json.load(outfile)
+                json_offset['videos'][av]['offset'] = offset
+
+                outfile.seek(0)  # Return to the beginning of the file
+                json.dump(json_offset, outfile, ensure_ascii=False)
+                outfile.truncate()  # Clean old data from file
+
+        except audioread.exceptions.NoBackendError:
+            print('Video missing audio track.')
+            window['offset'].update('Video has no audio track.', visible=True)
+
+        except IndexError:
+            print('No onset found on audio track. Onset analyze duration might be too low.')
+            window['offset'].update('No audio found.', visible=True)
+
+
+# GUI loop
 def create_gui():
     sg.theme('Dark Teal 11')
 
@@ -216,7 +457,7 @@ def create_gui():
                         default_value='All tracks', enable_events=True, key='track_filter', size=(30, 1)),
                         sg.Text('Filter'), sg.InputText(size=(10, 1), key='filter', enable_events=True)],
               [sg.Listbox(values='', size=(50, 34), enable_events=True, key='tracklist',
-                          right_click_menu=['&Right', ['Search Youtube', 'Open track folder']]), sg.Column(col1)],
+                          right_click_menu=['&Right', ['Search Youtube', 'Open track folder', 'Automate']]), sg.Column(col1)],
               [sg.Text('Youtube Search Term:')],
               [sg.Input('', size=(50, 1), key='search_field')],
               [sg.Button('Search Youtube', bind_return_key=True),
@@ -289,6 +530,7 @@ def create_gui():
                     window['track_name_and_author'].update('info.dat empty or not in proper format!')
                     #clear_info(['cover_image', 'track_duration'])
 
+                # Grab video info
                 video_json = fetch_video_json(track_path)
                 if video_json is not False:
                     av = video_json['activeVideo']  # Grab only the active video
@@ -313,14 +555,27 @@ def create_gui():
                     window['offset'].update('{}{}'.format('Offset: ', video_json['videos'][av]['offset']), visible=True)
                     window['Auto Offset'].update(disabled=False)
 
-                    # Find video in folder
+                    # Find video in folder and print info
                     try:
                         video_path = video_json['videos'][av]['videoPath']
                         video_size = os.stat(track_path + '/' + video_path).st_size / 1000000
-                        window['video_size'].update('{}{:.2f}{}'.format('Video downloaded - ', video_size, ' MB'), visible=True)
+
+                        # Grab video height
+                        # TODO This doesn't work on some videos, results show up as 0p
+                        cv2video = cv2.VideoCapture(track_path + '/' + video_path)
+                        video_height = cv2video.get(cv2.CAP_PROP_FRAME_HEIGHT)
+                        cv2.VideoCapture.release(cv2video)
+
+                        video_exists = True
+
+                        window['video_size'].update('{}{:.2f}{}{:.0f}p'.format('Video downloaded - ', video_size, ' MB - ', video_height), visible=True)
+
                     except FileNotFoundError:
                         print('Video not found!')
+                        video_exists = False
                         window['video_size'].update('Video file not found in folder', visible=True)
+                else:
+                    video_exists = False
 
                 # If track contains proper info.dat, display track name and author on the search field
                 if info_dat:
@@ -335,6 +590,8 @@ def create_gui():
 
         # Run search with the search term, only grabs the 1st result
         if event == 'Search Youtube':
+            search_youtube()
+            '''
             clear_info(['video_size', 'offset'])
 
             if not values['search_field']:
@@ -349,7 +606,8 @@ def create_gui():
 
                     info = ydl.extract_info('ytsearch:' + values['search_field'], download=False, ie_key='YoutubeSearch')
                     info = info['entries'][0]  # Grab only the first entry, in case the result is a playlist
-                    print(info)  # Print out the extracted video information for debug purposes
+                    # Print out the extracted video information for debug purposes
+                    print(info)
                     print(info['title'])
                     print(info['uploader'])
                     # print(info['description'])
@@ -386,7 +644,7 @@ def create_gui():
 
                     window['Download'].update(disabled=False)
 
-                    # TODO Fix file size grab
+                    # TODO Fix file size grab and add resolution information
                     #print(info)
                     #video_size = int(info['formats'][0]['filesize']) #/ 1000000
                     #window['video_size'].update('{:.2f}{}'.format(video_size, ' MB'), visible=True)
@@ -395,32 +653,51 @@ def create_gui():
                 except youtube_dl.utils.DownloadError:
                     print('No video found or unable to download video!')
                     sg.popup('No video found or unable to download video\n')
+                    '''
 
         #  Download the video, when download button is pressed
         if event == 'Download':
+            download_video(video_exists, track_path, track_seconds)
+            '''
             if not values['tracklist']:
                 print('No track selected!')
             elif not info:
                 print('No video selected!')
             else:
+                # Delete previous video
+                if video_exists:
+                    os.remove(track_path + '/' + video_path)
                 download = info['webpage_url']
                 print(download)
                 #  Display warning, if video is 1.5 times longer than the bs track
                 #  If info.dat is missing, the limit is 900 seconds
                 if info['duration'] > track_seconds * 1.5:
                     print('Video is way longer than the track!')
+                    window['video_size'].update('Video is way longer than the track.', visible=True)
                 else:
-                    #  Save video.json, encoding is utf8 otherwise there will be problems with MVP
+                    # Save video.json, encoding in utf8, otherwise there will be problems with MVP
                     with open(track_path + '/video.json', 'w', encoding='utf8') as outfile:
                         json.dump(data_set, outfile, ensure_ascii=False)
-                    #  Download the video
-                    youtube_dl.YoutubeDL({'format': 'mp4[height<=720]+bestaudio[ext=m4a]', 'outtmpl': track_path + '/%(title)s.%(ext)s'}).download([download])  # Outputs title + extension
+                    # Download the video
+                    # TODO See if there is a way to overwrite previous video
+                    try:
+                        youtube_dl.YoutubeDL({'format': 'mp4[height>=480][height<1080]+bestaudio[ext=m4a]', 'outtmpl': track_path + '/%(title)s.%(ext)s'}).download([download])  # Outputs title + extension
+                    except youtube_dl.utils.DownloadError:
+                        print('Unable to download video format, lowering requirements.')
+                        youtube_dl.YoutubeDL({'format': 'mp4[height<=720]+bestaudio[ext=m4a]',
+                                              'outtmpl': track_path + '/%(title)s.%(ext)s'}).download(
+                            [download])
                     try:
                         av = data_set['activeVideo']
+
                         video_path = data_set['videos'][av]['videoPath']
                         video_size = os.stat(track_path + '/' + video_path).st_size / 1000000
-                        window['video_size'].update('{}{:.2f}{}'.format('Video downloaded - ', video_size, ' MB'),
-                                                    visible=True)
+
+                        cv2video = cv2.VideoCapture(track_path + '/' + video_path)
+                        video_height = cv2video.get(cv2.CAP_PROP_FRAME_HEIGHT)
+                        cv2.VideoCapture.release(cv2video)
+
+                        window['video_size'].update('{}{:.2f}{}{:.0f}p'.format('Video downloaded - ', video_size, ' MB - ', video_height), visible=True)
                         window['Auto Offset'].update(disabled=False)
                         window['offset'].update('{}{}'.format('Offset: ', data_set['videos'][0]['offset']),
                                                 visible=True)
@@ -428,10 +705,12 @@ def create_gui():
                     except OSError:
                         print('Could not grab video file size, probably because of a weird symbol in filename')
                         window['video_size'].update('Video downloaded - File size not available', visible=True)
+                        '''
 
         # Calculate audio/video offset using MVP's tools or librosa
         if event == 'Auto Offset':
-
+            run_auto_offset(auto_offset)
+            '''
             # Offset using MVP
             if auto_offset == 0:
 
@@ -526,6 +805,7 @@ def create_gui():
                 except IndexError:
                     print('No onset found on audio track. Onset analyze duration might be too low.')
                     window['offset'].update('No audio found.', visible=True)
+                    '''
 
         if event == 'bs_folder':
             browse_bs_folder()
@@ -543,6 +823,13 @@ def create_gui():
                 print('No track selected')
             except FileNotFoundError:
                 print('No track selected')
+
+        if event == 'Automate':
+            if search_youtube():
+                print('search success')
+                if download_video(video_exists, track_path, track_seconds):
+                    print('dl success')
+                    run_auto_offset(auto_offset)
 
         if event == 'Select CustomLevels Folder':
             trackfolder = sg.popup_get_folder('', title='Select CustomLevels folder',
@@ -595,6 +882,7 @@ def create_gui():
 
         if event == 'About':
             webbrowser.open('https://github.com/CuriousCod/BeatSaberTrackManager/tree/master')
+
 
     window.close()
 
