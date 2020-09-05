@@ -13,6 +13,8 @@ import subprocess
 import librosa
 import audioread
 import cv2
+import requests
+from bs4 import BeautifulSoup
 
 # DONE Maybe implement best of three results ytsearch3 -> Not needed
 # DONE Make sure the app doesn't download 10 hour videos! -> Limit is now 1.5x duration of the track or if over 900sec
@@ -46,9 +48,11 @@ import cv2
 # DONE youtubeDL turns " into ' and : into  - -> Replace function
 # DONE 2df2 crashes auto offset -> Offset tool not very successful, added try
 # DONE Listbox chooses lowest option, if empty space clicked -> Feature, not a bug
-# TODO Update video.json format for the next MVP version
+# TODO Update video.json format to the next MVP version
 # TODO Bad url in video.json crashes app, probably a lot more exceptions than just this
 # DONE Download audio and video separately -> Fixed by always merging mp4 with m4a
+# TODO Check 3e24, there's some problem with the mp4 file
+# TODO HTTP Error 429: Too Many Requests
 
 
 # Verify if the browsed CustomLevels folder is valid and write the location to config.ini
@@ -322,71 +326,98 @@ def search_youtube():
         sg.popup('Please select a track from the list.\n')
     else:
         try:
+            # Run youtube search with youtubeDl
             ydl = youtube_dl.YoutubeDL({'outtmpl': '%(id)s.%(ext)s'})
-
-            info = ydl.extract_info('ytsearch:' + values['search_field'], download=False, ie_key='YoutubeSearch')
+            # In some cases users might get HTTP Error 429 if they download too much
+            # Since ytsearch doesn't support cookies this will result in a download error
+            info = ydl.extract_info('ytsearch:' + values['search_field'], download=False)
             info = info['entries'][0]  # Grab only the first entry, in case the result is a playlist
-            # Print out the extracted video information for debug purposes
-            print(info)
-            print(info['title'])
-            print(info['uploader'])
-            # print(info['description'])
-            print(info['duration'])  # Printed in seconds, convert this
-            print(info['webpage_url'])
-            print(info['thumbnail'])
 
-            # Convert duration into mm:ss
-            # Youtube seems to be off by a second from youtubedl, good enough I guess
-            video_duration = str(int(info['duration'] / 60))
-            video_duration = video_duration + ':' + str(info['duration'] % 60).zfill(2)
-
-            # Shorten webpage url
-            webpage_url = info['webpage_url'][info['webpage_url'].find('/watch'):-1]
-
-            urllib.request.urlretrieve(info['thumbnail'], 'thumbnail.png')
-            img = PIL.Image.open('thumbnail.png')
-            img = img.resize((360, 200))
-            img.save('thumbnail.png')
-            window['thumbnail'].update('thumbnail.png')
-            window['video_name'].update(info['title'])
-            window['video_duration'].update(video_duration)
-            window.Refresh()
-
-            #  Build video.json, "loop":false fixed in a hacky way :D, limited description to 106 characters
-            #  Unsupported symbols in Windows cause issues, running function to clean those up
-            video_path = replace_symbols(info['title'])
-
-            # Remove everything from thumbnail url starting from ? symbol
-            thumbnail_url = info['thumbnail']
-            if thumbnail_url.find('?') != -1:
-                thumbnail_url = thumbnail_url[0:thumbnail_url.find('?')]
-                print(thumbnail_url)
-
-            # Dataset for video.json
-            data_set = {'activeVideo': 0, 'videos': [
-                {'title': info['title'], 'author': info['uploader'],
-                 'description': info['description'][0:106] + ' ...',
-                 'duration': video_duration, 'URL': webpage_url, 'thumbnailURL': thumbnail_url,
-                 'loop': 'f' + 'alse', 'offset': 0, 'videoPath': video_path + '.mp4'}], 'Count': 1}
-
-            # video.json debug
-            print(json.dumps(data_set, ensure_ascii=False))
-
-            window['Download'].update(disabled=False)
-
-            # TODO Fix file size grab and add resolution information
-            # print(info)
-            # video_size = int(info['formats'][0]['filesize']) #/ 1000000
-            # window['video_size'].update('{:.2f}{}'.format(video_size, ' MB'), visible=True)
-            window.Refresh()
-
-            return True
-
+        # This error should occur when video is not found or accessible, for example error 429
         except youtube_dl.utils.DownloadError:
-            print('No video found or unable to download video!')
-            sg.popup('No video found or unable to download video\n')
-            return False
+            try:
+                # If user has cookies file, run another search with beautiful soup, this can workaround the 429 error
+                if os.path.exists('cookies.txt'):
+                    print('Cookies are available, running another search with soup')
+                    page = requests.get("https://www.youtube.com/results?search_query=" + values['search_field'].replace(' ', '+'))
+                    soup = BeautifulSoup(page.content, 'html.parser')
+                    soup = soup.find_all('script')
 
+                    # TODO This is not a very dynamic way to handle this, fix this later
+                    # TODO See if playlists break this
+                    # Grab the video id from the search page
+                    text = str(soup[26])
+                    url = text.find('watch?')
+                    url = text[url + 8:url + 19]
+
+                    # Run normal youtubedl url extractor, this one supports cookies
+                    ydl = youtube_dl.YoutubeDL({'outtmpl': '%(id)s.%(ext)s', 'cookiefile': 'cookies.txt'})
+                    info = ydl.extract_info('https://www.youtube.com/watch?v=' + url, download=False)
+                else:
+                    print('No video found or unable to download video!')
+                    sg.popup('No video found or unable to download video\n')
+                    return False
+
+            except youtube_dl.utils.DownloadError:
+                print('No video found or unable to download video!')
+                sg.popup('No video found or unable to download video\n')
+                return False
+
+        # Print out the extracted video information for debug purposes
+        print(info)
+        print(info['title'])
+        print(info['uploader'])
+        # print(info['description'])
+        print(info['duration'])  # Printed in seconds, convert this
+        print(info['webpage_url'])
+        print(info['thumbnail'])
+
+        # Convert duration into mm:ss
+        # Youtube seems to be off by a second from youtubedl, good enough I guess
+        video_duration = str(int(info['duration'] / 60))
+        video_duration = video_duration + ':' + str(info['duration'] % 60).zfill(2)
+
+        # Shorten webpage url
+        webpage_url = info['webpage_url'][info['webpage_url'].find('/watch'):-1]
+
+        urllib.request.urlretrieve(info['thumbnail'], 'thumbnail.png')
+        img = PIL.Image.open('thumbnail.png')
+        img = img.resize((360, 200))
+        img.save('thumbnail.png')
+        window['thumbnail'].update('thumbnail.png')
+        window['video_name'].update(info['title'])
+        window['video_duration'].update(video_duration)
+        window.Refresh()
+
+        #  Build video.json, "loop":false fixed in a hacky way :D, limited description to 106 characters
+        #  Unsupported symbols in Windows cause issues, running function to clean those up
+        video_path = replace_symbols(info['title'])
+
+        # Remove everything from thumbnail url starting from ? symbol
+        thumbnail_url = info['thumbnail']
+        if thumbnail_url.find('?') != -1:
+            thumbnail_url = thumbnail_url[0:thumbnail_url.find('?')]
+            print(thumbnail_url)
+
+        # Dataset for video.json
+        data_set = {'activeVideo': 0, 'videos': [
+            {'title': info['title'], 'author': info['uploader'],
+             'description': info['description'][0:106] + ' ...',
+             'duration': video_duration, 'URL': webpage_url, 'thumbnailURL': thumbnail_url,
+             'loop': 'f' + 'alse', 'offset': 0, 'videoPath': video_path + '.mp4'}], 'Count': 1}
+
+        # video.json debug
+        print(json.dumps(data_set, ensure_ascii=False))
+
+        window['Download'].update(disabled=False)
+
+        # TODO Fix file size grab and add resolution information
+        # print(info)
+        # video_size = int(info['formats'][0]['filesize']) #/ 1000000
+        # window['video_size'].update('{:.2f}{}'.format(video_size, ' MB'), visible=True)
+        window.Refresh()
+
+        return True
 
 #  Download the video, when download button is pressed
 def download_video():
@@ -409,6 +440,7 @@ def download_video():
         download = info['webpage_url']
         print(download)
         #  Display warning, if video is 1.5 times longer than the bs track
+        #  TODO Add a confirmation window here
         #  If info.dat is missing, the limit is 900 seconds
         if info['duration'] > track_seconds * 1.5:
             print('Video is way longer than the track!')
@@ -423,6 +455,7 @@ def download_video():
             # TODO See if there is a way to overwrite previous video
             try:
                 youtube_dl.YoutubeDL({'format': 'mp4[height>=480][height<1080]+bestaudio[ext=m4a]',
+                                      'cookiefile':'cookies.txt',
                                       'outtmpl': track_path + '/%(title)s.%(ext)s'}).download(
                     [download])  # Outputs title + extension
             except youtube_dl.utils.DownloadError:
@@ -559,6 +592,7 @@ def run_auto_offset(auto_offset):
         except FileNotFoundError:
             print('No video found!.')
             window['offset'].update('No video found.', visible=True)
+
 
 # GUI loop
 def create_GUI():
