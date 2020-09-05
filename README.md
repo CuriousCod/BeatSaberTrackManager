@@ -24,6 +24,7 @@ An application to complement the MVP mod (https://github.com/rie-kumar/MusicVide
   - 8149 (Great Days - Joetastic)
 - If there are multiple videos downloaded for the track, the application picks the one set as active (activeVideo) in video.json. 
 - If you encounter any bugs or have feature requests, create a new issue please
+- I'm also porting the code to C# https://github.com/CuriousCod/BeatSaberTrackManagerSharpened
 
 <h3>Developed with:</h3>
 
