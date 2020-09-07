@@ -7,7 +7,7 @@ An application to complement the MVP mod (https://github.com/rie-kumar/MusicVide
 - To display tracks choose File => Select CustomLevels Folder => Choose your CustomLevels folder
 - If you want to use fast auto offset (on by default), add a copy of ffmpeg.exe to the same folder as BSTM.exe
 
-<h3>Notes:</h3>
+<h3>Usage Notes:</h3>
 
 - Video is downloaded with the following video/audio arguments: mp4[height>=480][height<1080]+bestaudio[ext=m4a]
   - Audio is required for the auto offset feature
