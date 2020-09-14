@@ -7,7 +7,7 @@ An application to complement the MVP mod (https://github.com/rie-kumar/MusicVide
 - To display tracks choose File => Select CustomLevels Folder => Choose your CustomLevels folder
 - If you want to use fast auto offset (on by default), add a copy of ffmpeg.exe to the same folder as BSTM.exe
 
-<h3>Notes:</h3>
+<h3>Usage Notes:</h3>
 
 - Video is downloaded with the following video/audio arguments: mp4[height>=480][height<1080]+bestaudio[ext=m4a]
   - Audio is required for the auto offset feature
@@ -24,7 +24,6 @@ An application to complement the MVP mod (https://github.com/rie-kumar/MusicVide
   - 8149 (Great Days - Joetastic)
 - If there are multiple videos downloaded for the track, the application picks the one set as active (activeVideo) in video.json. 
 - If you encounter any bugs or have feature requests, create a new issue please
-- I'm also porting the code to C# https://github.com/CuriousCod/BeatSaberTrackManagerSharpened
 
 <h3>Developed with:</h3>
 
@@ -34,6 +33,7 @@ An application to complement the MVP mod (https://github.com/rie-kumar/MusicVide
 - Fast auto offset implemented with librosa (https://librosa.org/doc/latest/index.html)
 - .exe created using PyInstaller
 - Also using various other libraries for smaller tasks
+- I'm also porting the code to C# https://github.com/CuriousCod/BeatSaberTrackManagerSharpened
 
 ![Preview image](https://www.dropbox.com/s/d9teb2xio3r2nsw/Screenshot%202020-08-24%2002.26.48.png?raw=1)
 
