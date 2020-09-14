@@ -50,9 +50,10 @@ from bs4 import BeautifulSoup
 # DONE Listbox chooses lowest option, if empty space clicked -> Feature, not a bug
 # TODO Update video.json format to the next MVP version
 # TODO Bad url in video.json crashes app, probably a lot more exceptions than just this
+# TODO Try to reduce app size
 # DONE Download audio and video separately -> Fixed by always merging mp4 with m4a
 # TODO Check 3e24, there's some problem with the mp4 file
-# TODO HTTP Error 429: Too Many Requests
+# DONE HTTP Error 429: Too Many Requests -> Added backup search
 
 
 # Verify if the browsed CustomLevels folder is valid and write the location to config.ini
@@ -339,20 +340,19 @@ def search_youtube():
                 # If user has cookies file, run another search with beautiful soup, this can workaround the 429 error
                 if os.path.exists('cookies.txt'):
                     print('Cookies are available, running another search with soup')
-                    page = requests.get("https://www.youtube.com/results?search_query=" + values['search_field'].replace(' ', '+'))
+                    page = requests.get('https://www.youtube.com/results?search_query=' + values['search_field'].replace(' ', '+'))
                     soup = BeautifulSoup(page.content, 'html.parser')
                     soup = soup.find_all('script')
 
-                    # TODO This is not a very dynamic way to handle this, fix this later
-                    # TODO See if playlists break this
                     # Grab the video id from the search page
-                    text = str(soup[26])
-                    url = text.find('watch?')
-                    url = text[url + 8:url + 19]
+                    text = str(soup)  # Convert tag object in string, result 26 in tag object contains the video id
+                    video_id = text.find('watch?') # Finding the first video result
+                    video_id = text[video_id + 8:video_id + 19]
+                    print('https://www.youtube.com/watch?v=' + video_id)
 
                     # Run normal youtubedl url extractor, this one supports cookies
                     ydl = youtube_dl.YoutubeDL({'outtmpl': '%(id)s.%(ext)s', 'cookiefile': 'cookies.txt'})
-                    info = ydl.extract_info('https://www.youtube.com/watch?v=' + url, download=False)
+                    info = ydl.extract_info('https://www.youtube.com/watch?v=' + video_id, download=False)
                 else:
                     print('No video found or unable to download video!')
                     sg.popup('No video found or unable to download video\n')
