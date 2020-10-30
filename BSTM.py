@@ -54,6 +54,8 @@ from bs4 import BeautifulSoup
 # DONE Download audio and video separately -> Fixed by always merging mp4 with m4a
 # TODO Check 3e24, there's some problem with the mp4 file
 # DONE HTTP Error 429: Too Many Requests -> Added backup search
+# TODO Catch Youtube SSL error CERTIFICATE_VERIFY_FAILED
+# DONE Window resizing
 
 
 # Verify if the browsed CustomLevels folder is valid and write the location to config.ini
@@ -631,14 +633,15 @@ def create_GUI():
               ]
 
     global window
-    window = sg.Window('Beat Saber Track Manager', layout, font='Courier 12').finalize()
+    windowSize = (953, 783)  # Default window size
+    window = sg.Window('Beat Saber Track Manager', layout, font='Courier 12', icon='BSTM.ico', size=(windowSize), resizable=True).finalize()
 
     # Check for config.ini
     config_bs_folder()
     auto_offset = 1  # Use fast auto offset as default
 
     while True:
-        event, values = window.read()
+        event, values = window.read(timeout=1000)
         if event == sg.WIN_CLOSED or event == 'Exit':  # if user closes window or clicks cancel
             if os.path.exists('cover.png'):
                 os.remove('cover.png')
@@ -740,7 +743,17 @@ def create_GUI():
             menu_elem.Update(menu_def)
 
         if event == 'About':
+            print(window.size)
             webbrowser.open('https://github.com/CuriousCod/BeatSaberTrackManager/tree/master')
+
+        # Works perfectly when maximizing window, otherwise only updates when any action is taken in the window
+        if windowSize != window.size:
+            print(window.size)
+            CurrentWindowSize = window.size
+            TracksElementSize = (int(CurrentWindowSize[0] * 0.1) - 45, int(CurrentWindowSize[1] * 0.044))
+            print(TracksElementSize)
+            window['tracklist'].set_size(TracksElementSize)
+            windowSize = window.size
 
     window.close()
 
