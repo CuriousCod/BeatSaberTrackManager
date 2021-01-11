@@ -1,7 +1,7 @@
 import os
 from os import path
 from pathlib import Path
-import youtube_dl
+import youtube_dlc as youtube_dl
 import json
 import PySimpleGUI as sg
 import PIL
@@ -468,10 +468,23 @@ def download_video():
             try:
                 av = data_set['activeVideo']
 
-                video_path = data_set['videos'][av]['videoPath']
-                video_size = os.stat(track_path + '/' + video_path).st_size / 1000000
+                #video_path = data_set['videos'][av]['videoPath']
 
-                cv2video = cv2.VideoCapture(track_path + '/' + video_path)
+                # Patchwork fix for bad symbols in filenames
+                # The symbol replacement function is not enough in itself
+                files = os.listdir(track_path + '/')
+                for filename in files:
+                    if filename.endswith('.mp4'):
+                        with open(track_path + '/video.json', 'r', encoding='UTF-8') as f:
+                            trackData = json.load(f)
+                        if trackData['videos'][av]['videoPath'] != filename:
+                            trackData['videos'][av]['videoPath'] = filename
+                        with open(track_path + '/video.json', 'w', encoding='UTF-8') as f:
+                            json.dump(trackData, f)
+
+                video_size = os.stat(track_path + '/' + trackData['videos'][av]['videoPath']).st_size / 1000000
+
+                cv2video = cv2.VideoCapture(track_path + '/' + trackData['videos'][av]['videoPath'])
                 video_height = cv2video.get(cv2.CAP_PROP_FRAME_HEIGHT)
                 cv2.VideoCapture.release(cv2video)
 
