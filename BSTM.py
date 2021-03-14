@@ -1,6 +1,5 @@
 import os
 from os import path
-from pathlib import Path
 import youtube_dlc as youtube_dl
 import json
 import PySimpleGUI as sg
@@ -125,8 +124,8 @@ def check_tracks():
         for i in tracks:
             print(i)
             both_video.append(i)
-            my_file = Path(values['bs_folder'] + '\\' + i + '\\video.json')
-            if my_file.is_file():
+            my_file = values['bs_folder'] + '\\' + i + '\\video.json'
+            if os.path.isfile(my_file):
                 print('yes')
                 yes_video.append(i)
             else:
@@ -164,7 +163,7 @@ def replace_symbols(filename):
 # Fetches and updates video.json to the newest format
 def fetch_video_json(track_path):
 
-    if Path(track_path + '/video.json').is_file():
+    if os.path.isfile(track_path + '/video.json'):
         with open(track_path + '/video.json', 'r+',  encoding='utf8') as f:
             try:
                 video_json = json.load(f)
