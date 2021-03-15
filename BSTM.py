@@ -636,7 +636,7 @@ def create_GUI():
                         default_value='All tracks', enable_events=True, key='track_filter', size=(30, 1)),
                         sg.Text('Filter'), sg.InputText(size=(10, 1), key='filter', enable_events=True)],
               [sg.Listbox(values='', size=(50, 34), enable_events=True, key='tracklist',
-                          right_click_menu=['&Right', ['Search Youtube', 'Open track folder', 'Automate']]), sg.Column(col1)],
+                          right_click_menu=['&Right', ['Search Youtube', 'Open track folder', 'Automate']]), sg.Column(col1, vertical_alignment="top")],
               [sg.Text('Youtube Search Term:')],
               [sg.Input('', size=(50, 1), key='search_field')],
               [sg.Button('Search Youtube', bind_return_key=True),
