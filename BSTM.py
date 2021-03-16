@@ -596,7 +596,7 @@ def run_auto_offset(auto_offset):
                 outfile.truncate()  # Clean old data from file
 
         except audioread.exceptions.NoBackendError:
-            print('Video missing audio track.')
+            print('No audio track found in video. Are you missing ffmpeg.exe?')
             window['offset'].update('Video has no audio track.', visible=True)
 
         except IndexError:
