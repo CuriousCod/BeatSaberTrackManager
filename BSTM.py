@@ -772,6 +772,3 @@ def create_GUI():
             windowSize = window.size
 
     window.close()
-
-
-create_GUI()
