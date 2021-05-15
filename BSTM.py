@@ -1,6 +1,6 @@
 import os
 from os import path
-import youtube_dlc as youtube_dl
+import youtube_dl
 import json
 import PySimpleGUI as sg
 import PIL
@@ -333,7 +333,11 @@ def search_youtube():
             # In some cases users might get HTTP Error 429 if they download too much
             # Since ytsearch doesn't support cookies this will result in a download error
             info = ydl.extract_info('ytsearch:' + values['search_field'], download=False)
-            info = info['entries'][0]  # Grab only the first entry, in case the result is a playlist
+            if len(info['entries']) > 0:
+                info = info['entries'][0]  # Grab only the first entry, in case the result is a playlist
+            else:
+                print("No video found")
+                return
 
         # This error should occur when video is not found or accessible, for example error 429
         except youtube_dl.utils.DownloadError:
