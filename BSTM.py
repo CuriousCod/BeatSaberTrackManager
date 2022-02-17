@@ -1,6 +1,6 @@
 import os
 from os import path
-import youtube_dl
+import yt_dlp as youtube_dl
 import json
 import PySimpleGUI as sg
 import PIL
