@@ -78,20 +78,21 @@ def browse_bs_folder():
 
 # Check config.ini for the bs folder location
 def config_bs_folder():
-    event, values = window.read(timeout=0)
-    if path.exists('config.ini'):
-        f = open('config.ini', 'r', encoding='utf-8')
-        verifyfolder = f.read()
-        window['bs_folder'].update(verifyfolder)
-        f.close()
-        if verifyfolder.find('CustomLevels') == -1:
-            print('This is not the custom tracks folder!')
-            window['tracklist'].update('')
-            window['track_filter'].update(disabled=True)
-            window['filter'].update(visible=False)
-            window.Refresh()
-        else:
-            check_tracks()
+    if not path.exists('config.ini'):
+        return
+
+    f = open('config.ini', 'r', encoding='utf-8')
+    verifyfolder = f.read()
+    window['bs_folder'].update(verifyfolder)
+    f.close()
+    if verifyfolder.find('CustomLevels') == -1:
+        print('This is not the custom tracks folder!')
+        window['tracklist'].update('')
+        window['track_filter'].update(disabled=True)
+        window['filter'].update(visible=False)
+        window.Refresh()
+    else:
+        check_tracks()
 
 
 # Clears displayed info in the GUI
@@ -111,33 +112,33 @@ def clear_info(clear):
 def check_tracks():
     event, values = window.read(timeout=0)
 
-    global yes_video
-    global no_video
-    global both_video
+    global tracksWithVideo
+    global tracksWithNoVideo
+    global allTracks
 
-    yes_video = []
-    no_video = []
-    both_video = []
+    tracksWithVideo = []
+    tracksWithNoVideo = []
+    allTracks = []
 
     try:
         tracks = os.listdir(values['bs_folder'])
         for i in tracks:
             print(i)
-            both_video.append(i)
+            allTracks.append(i)
             my_file = values['bs_folder'] + '\\' + i + '\\video.json'
             if os.path.isfile(my_file):
                 print('yes')
-                yes_video.append(i)
+                tracksWithVideo.append(i)
             else:
-                no_video.append(i)
+                tracksWithNoVideo.append(i)
 
         # Python doesn't have case/switch statement?!
         if values['track_filter'] == 'All tracks':
-            window['tracklist'].update(both_video)
+            window['tracklist'].update(allTracks)
         elif values['track_filter'] == 'Tracks without video':
-            window['tracklist'].update(no_video)
+            window['tracklist'].update(tracksWithNoVideo)
         elif values['track_filter'] == 'Tracks with video':
-            window['tracklist'].update(yes_video)
+            window['tracklist'].update(tracksWithVideo)
     except OSError:
         print('CustomLevels folder is not valid!')
         sg.popup('CustomLevels folder is not valid.\nPlease select the CustomLevels folder from the file menu.')
@@ -161,10 +162,10 @@ def replace_symbols(filename):
 
 
 # Fetches and updates video.json to the newest format
-def fetch_video_json(track_path):
+def fetch_video_json(track_fullPath):
 
-    if os.path.isfile(track_path + '/video.json'):
-        with open(track_path + '/video.json', 'r+',  encoding='utf8') as f:
+    if os.path.isfile(track_fullPath + '/video.json'):
+        with open(track_fullPath + '/video.json', 'r+', encoding='utf8') as f:
             try:
                 video_json = json.load(f)
                 # Check if the json is in the new format, if not convert it
@@ -199,20 +200,18 @@ def fetch_video_json(track_path):
 
 
 # Updates track information when a track is selected from the list
-def tracklist():
+def select_track():
     event, values = window.read(timeout=0)
 
     global video_exists
-    global track_path
     global track_seconds
 
     clear_info('')
     if not values['tracklist']:
         print('No tracks!')
     else:
-        search = str(values['tracklist'])  # Chosen track
-        track_path = values['bs_folder'] + '/' + search.replace('[\'', '').replace('\']', '').replace('"]', '').replace(
-            '["', '')
+        selectedTrack = str(values['tracklist'])
+        track_path = current_track_fullpath()
         try:
             with open(track_path + '/info.dat', encoding='utf8') as f:
                 info_dat = True
@@ -301,11 +300,11 @@ def tracklist():
 
         # If track contains proper info.dat, display track name and author on the search field
         if info_dat:
-            search = track_json['_songName'] + ' ' + track_json['_songAuthorName']
+            selectedTrack = track_json['_songName'] + ' ' + track_json['_songAuthorName']
         # Otherwise cut the excess text from the folder name, based on ( and - symbols. Display on search field
         else:
-            search = search[search.find('(') + 1:search.rfind('-') - 1]
-        window['search_field'].update(search)
+            selectedTrack = selectedTrack[selectedTrack.find('(') + 1:selectedTrack.rfind('-') - 1]
+        window['search_field'].update(selectedTrack)
 
         window['Download'].update(disabled=True)
         window.Refresh()
@@ -424,8 +423,9 @@ def search_youtube():
 
         return True
 
+
 #  Download the video, when download button is pressed
-def download_video():
+def download_video(track_fullPath):
     event, values = window.read(timeout=0)
     av = data_set['activeVideo']
 
@@ -437,7 +437,7 @@ def download_video():
         # Delete previous video
         try:
             if video_exists:
-                os.remove(track_path + '/' + data_set['videos'][av]["videoPath"])
+                os.remove(track_fullPath + '/' + data_set['videos'][av]["videoPath"])
         except FileNotFoundError:
             print('Could not delete previous video.')
             sg.popup('Could not delete previous video.\nPlease delete it manually from the folder.')
@@ -454,19 +454,19 @@ def download_video():
             return False
         else:
             # Save video.json, encoding in utf8, otherwise there will be problems with MVP
-            with open(track_path + '/video.json', 'w', encoding='utf8') as outfile:
+            with open(track_fullPath + '/video.json', 'w', encoding='utf8') as outfile:
                 json.dump(data_set, outfile, ensure_ascii=False)
             # Download the video
             # TODO See if there is a way to overwrite previous video
             try:
                 youtube_dl.YoutubeDL({'format': 'mp4[height>=480][height<1080]+bestaudio[ext=m4a]',
                                       'cookiefile':'cookies.txt',
-                                      'outtmpl': track_path + '/%(title)s.%(ext)s'}).download(
+                                      'outtmpl': track_fullPath + '/%(title)s.%(ext)s'}).download(
                     [download])  # Outputs title + extension
             except youtube_dl.utils.DownloadError:
                 print('Unable to download video format, lowering requirements.')
                 youtube_dl.YoutubeDL({'format': 'mp4[height<=720]+bestaudio[ext=m4a]',
-                                      'outtmpl': track_path + '/%(title)s.%(ext)s'}).download(
+                                      'outtmpl': track_fullPath + '/%(title)s.%(ext)s'}).download(
                     [download])
             try:
                 av = data_set['activeVideo']
@@ -475,19 +475,20 @@ def download_video():
 
                 # Patchwork fix for bad symbols in filenames
                 # The symbol replacement function is not enough in itself
-                files = os.listdir(track_path + '/')
+                files = os.listdir(track_fullPath + '/')
                 for filename in files:
-                    if filename.endswith('.mp4'):
-                        with open(track_path + '/video.json', 'r', encoding='UTF-8') as f:
-                            trackData = json.load(f)
-                        if trackData['videos'][av]['videoPath'] != filename:
-                            trackData['videos'][av]['videoPath'] = filename
-                        with open(track_path + '/video.json', 'w', encoding='UTF-8') as f:
-                            json.dump(trackData, f)
+                    if not filename.endswith('.mp4'):
+                        continue
+                    with open(track_fullPath + '/video.json', 'r', encoding='UTF-8') as f:
+                        trackData = json.load(f)
+                    if trackData['videos'][av]['videoPath'] != filename:
+                        trackData['videos'][av]['videoPath'] = filename
+                    with open(track_fullPath + '/video.json', 'w', encoding='UTF-8') as f:
+                        json.dump(trackData, f)
 
-                video_size = os.stat(track_path + '/' + trackData['videos'][av]['videoPath']).st_size / 1000000
+                video_size = os.stat(track_fullPath + '/' + trackData['videos'][av]['videoPath']).st_size / 1000000
 
-                cv2video = cv2.VideoCapture(track_path + '/' + trackData['videos'][av]['videoPath'])
+                cv2video = cv2.VideoCapture(track_fullPath + '/' + trackData['videos'][av]['videoPath'])
                 video_height = cv2video.get(cv2.CAP_PROP_FRAME_HEIGHT)
                 cv2.VideoCapture.release(cv2video)
 
@@ -506,11 +507,16 @@ def download_video():
 
 
 # Calculate audio/video offset using MVP's tools or librosa
-def run_auto_offset(auto_offset):
+def run_auto_offset(offsetMethod: int, trackFullPath: str):
     event, values = window.read(timeout=0)
 
+    if not os.path.exists(trackFullPath) or not os.path.isfile(trackFullPath + '/video.json') or not os.path.isfile(
+            trackFullPath + '/info.dat'):
+        print('Track folder is not valid!')
+        return
+
     # Offset using MVP
-    if auto_offset == 0:
+    if offsetMethod == 0:
 
         window['offset'].update('Calculating offset...', visible=True)
         window.Refresh()
@@ -518,20 +524,15 @@ def run_auto_offset(auto_offset):
         offset_tool = values['bs_folder'][0:values['bs_folder'].find('Beat Saber_Data')]
         offset_tool = '\"' + offset_tool + 'Youtube-dl/SyncVideoWithAudio/SyncVideoWithAudio.exe' + '\"' + ' offset'
 
-        search = str(values['tracklist'])  # Chosen track
-        track_path = values['bs_folder'] + '/' + search.replace('[\'', '').replace('\']', '').replace('"]',
-                                                                                                      '').replace(
-            '["', '')
-
-        with open(track_path + '/info.dat', 'r', encoding='utf8') as outfile:
+        with open(trackFullPath + '/info.dat', 'r', encoding='utf8') as outfile:
             track_json = json.load(outfile)
-            offset_audio = ' \"' + track_path + '/' + track_json['_songFilename'] + '\"'
+            offset_audio = ' \"' + trackFullPath + '/' + track_json['_songFilename'] + '\"'
             print(offset_audio)
 
-        with open(track_path + '/video.json', 'r', encoding='utf8') as outfile:
+        with open(trackFullPath + '/video.json', 'r', encoding='utf8') as outfile:
             video_json = json.load(outfile)
             av = video_json['activeVideo']
-            offset_video = ' \"' + track_path + '/' + video_json['videos'][av]['videoPath'] + '\"'
+            offset_video = ' \"' + trackFullPath + '/' + video_json['videos'][av]['videoPath'] + '\"'
             print(offset_video)
 
         try:
@@ -546,7 +547,7 @@ def run_auto_offset(auto_offset):
             offset *= -1  # Values are flipped in video.json
             window['offset'].update('{}{}'.format('Offset: ', offset), visible=True)
 
-            with open(track_path + '/video.json', 'r+', encoding='utf8') as outfile:
+            with open(trackFullPath + '/video.json', 'r+', encoding='utf8') as outfile:
                 json_offset = json.load(outfile)
                 json_offset['videos'][av]['offset'] = offset
 
@@ -562,20 +563,15 @@ def run_auto_offset(auto_offset):
             window['offset'].update('Could not calculate offset', visible=True)
 
     # Offset with librosa, usually faster
-    elif auto_offset == 1:
+    elif offsetMethod == 1:
 
-        search = str(values['tracklist'])  # Chosen track
-        track_path = values['bs_folder'] + '/' + search.replace('[\'', '').replace('\']', '').replace('"]',
-                                                                                                      '').replace(
-            '["', '')
-
-        with open(track_path + '/info.dat', 'r', encoding='utf8') as outfile:
+        with open(trackFullPath + '/info.dat', 'r', encoding='utf8') as outfile:
             track_name = json.load(outfile)
-            track_name = track_path + '/' + track_name['_songFilename']
-        with open(track_path + '/video.json', 'r', encoding='utf8') as outfile:
+            track_name = trackFullPath + '/' + track_name['_songFilename']
+        with open(trackFullPath + '/video.json', 'r', encoding='utf8') as outfile:
             track_video = json.load(outfile)
             av = track_video['activeVideo']
-            track_video = track_path + '/' + track_video['videos'][av]['videoPath']
+            track_video = trackFullPath + '/' + track_video['videos'][av]['videoPath']
 
         try:
             y, sr = librosa.load(track_name, duration=8)
@@ -591,7 +587,7 @@ def run_auto_offset(auto_offset):
 
             window['offset'].update('{}{}'.format('Offset: ', offset), visible=True)
 
-            with open(track_path + '/video.json', 'r+', encoding='utf8') as outfile:
+            with open(trackFullPath + '/video.json', 'r+', encoding='utf8') as outfile:
                 json_offset = json.load(outfile)
                 json_offset['videos'][av]['offset'] = offset
 
@@ -610,6 +606,12 @@ def run_auto_offset(auto_offset):
         except FileNotFoundError:
             print('No video found!.')
             window['offset'].update('No video found.', visible=True)
+
+
+def current_track_fullpath() -> str:
+    event, values = window.read(timeout=0)
+    search = str(values['tracklist'])  # Chosen track
+    return values['bs_folder'] + '/' + search.replace('[\'', '').replace('\']', '').replace('"]', '').replace('["', '')
 
 
 # GUI loop
@@ -654,7 +656,7 @@ def create_GUI():
 
     # Check for config.ini
     config_bs_folder()
-    auto_offset = 1  # Use fast auto offset as default
+    offsetMethod = 1  # Use fast auto offset as default
 
     while True:
         event, values = window.read(timeout=1000)
@@ -671,7 +673,7 @@ def create_GUI():
         if event == 'tracklist':
             #info = None  # Clear video info from previous searches
             clear_info('')
-            tracklist()
+            select_track()
 
         # Run search with the search term, only grabs the 1st result
         if event == 'Search Youtube':
@@ -679,11 +681,11 @@ def create_GUI():
 
         #  Download the video, when download button is pressed
         if event == 'Download':
-            download_video()
+            download_video(current_track_fullpath())
 
         # Calculate audio/video offset using MVP's tools or librosa
         if event == 'Auto Offset':
-            run_auto_offset(auto_offset)
+            run_auto_offset(offsetMethod, current_track_fullpath())
 
         if event == 'bs_folder':
             browse_bs_folder()
@@ -693,30 +695,32 @@ def create_GUI():
 
         if event == 'Open track folder':
             try:
-                search = str(values['tracklist'])  # Chosen track
-                track_path = values['bs_folder'] + '/' + search.replace('[\'', '').replace('\']', '').replace('"]', '').replace('["', '')
-                print(track_path)
-                os.startfile(track_path)
+                trackFullPath = current_track_fullpath()
+                print(trackFullPath)
+                os.startfile(trackFullPath)
             except UnboundLocalError:
                 print('No track selected')
             except FileNotFoundError:
                 print('No track selected')
 
         if event == 'Automate':
-            if search_youtube():
-                print('search success')
-                if download_video():
-                    print('dl success')
-                    run_auto_offset(auto_offset)
+            current_track = current_track_fullpath()
+            if not search_youtube():
+                continue
+            print('search success')
+            if not download_video(current_track_fullpath()):
+                continue
+            print('dl success')
+            run_auto_offset(offsetMethod, current_track)
 
         if event == 'Select CustomLevels Folder':
-            trackfolder = sg.popup_get_folder('', title='Select CustomLevels folder',
+            trackFolder = sg.popup_get_folder('', title='Select CustomLevels folder',
                                               no_window=True, modal=True, keep_on_top=True)
-            if not trackfolder:
+            if not trackFolder:
                 print('No folder selected!')
             else:
                 clear_info('')
-                window['bs_folder'].update(trackfolder)
+                window['bs_folder'].update(trackFolder)
                 browse_bs_folder()
 
         if event == 'filter':
@@ -724,11 +728,11 @@ def create_GUI():
             results = []
 
             if values['track_filter'] == 'All tracks':
-                filter_list = both_video
+                filter_list = allTracks
             elif values['track_filter'] == 'Tracks without video':
-                filter_list = no_video
+                filter_list = tracksWithNoVideo
             elif values['track_filter'] == 'Tracks with video':
-                filter_list = yes_video
+                filter_list = tracksWithVideo
 
             if len(values['filter']) < 2:
                 window['tracklist'].update(filter_list)
@@ -736,23 +740,23 @@ def create_GUI():
             # Don't filter, if the filter has less than 3 characters
             if len(values['filter']) < 3:
                 continue
-            else:
-                clear_info('')
-                for i in filter_list:
-                    if (values['filter']) in i.lower():
-                        results.append(i)
-                window['tracklist'].update(results)
-                window.Refresh()
+
+            clear_info('')
+            for i in filter_list:
+                if (values['filter']) in i.lower():
+                    results.append(i)
+            window['tracklist'].update(results)
+            window.Refresh()
 
         if event == 'Use Normal Auto Offset':
-            auto_offset = 0
+            offsetMethod = 0
             menu_def = [['File', ['Select CustomLevels Folder', 'Exit']],
                         ['Settings', ['Use Normal Auto Offset     X', 'Use Fast Auto Offset']],
                         ['Help', 'About'], ]
             menu_elem.Update(menu_def)
 
         if event == 'Use Fast Auto Offset':
-            auto_offset = 1
+            offsetMethod = 1
             menu_def = [['File', ['Select CustomLevels Folder', 'Exit']],
                         ['Settings', ['Use Normal Auto Offset', 'Use Fast Auto Offset            X']],
                         ['Help', 'About'], ]
@@ -762,7 +766,6 @@ def create_GUI():
             print(window.size)
             webbrowser.open('https://github.com/CuriousCod/BeatSaberTrackManager/tree/master')
 
-        # Works perfectly when maximizing window, otherwise only updates when any action is taken in the window
         if windowSize != window.size:
             print(window.size)
             CurrentWindowSize = window.size
