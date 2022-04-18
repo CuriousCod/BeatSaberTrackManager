@@ -311,7 +311,7 @@ def select_track():
 
 
 # Run search with the search term, only grabs the 1st result
-def search_youtube():
+def search_youtube() -> bool:
     event, values = window.read(timeout=0)
     clear_info(['video_size', 'offset'])
 
@@ -322,188 +322,194 @@ def search_youtube():
     if not values['search_field']:
         print('Search field empty!')
         sg.popup('Please input a search term.\n')
-    elif not values['tracklist']:
+        return False
+
+    if not values['tracklist']:
         print('No track selected!')
         sg.popup('Please select a track from the list.\n')
-    else:
+        return False
+
+    try:
+        # Run youtube search with youtubeDl
+        ydl = youtube_dl.YoutubeDL({'outtmpl': '%(id)s.%(ext)s'})
+        # In some cases users might get HTTP Error 429 if they download too much
+        # Since ytsearch doesn't support cookies this will result in a download error
+        info = ydl.extract_info('ytsearch:' + values['search_field'], download=False)
+        if len(info['entries']) > 0:
+            info = info['entries'][0]  # Grab only the first entry, in case the result is a playlist
+        else:
+            print("No video found")
+            return False
+
+    # This error should occur when video is not found or accessible, for example error 429
+    except youtube_dl.utils.DownloadError:
         try:
-            # Run youtube search with youtubeDl
-            ydl = youtube_dl.YoutubeDL({'outtmpl': '%(id)s.%(ext)s'})
-            # In some cases users might get HTTP Error 429 if they download too much
-            # Since ytsearch doesn't support cookies this will result in a download error
-            info = ydl.extract_info('ytsearch:' + values['search_field'], download=False)
-            if len(info['entries']) > 0:
-                info = info['entries'][0]  # Grab only the first entry, in case the result is a playlist
+            # If user has cookies file, run another search with beautiful soup, this can workaround the 429 error
+            if os.path.exists('cookies.txt'):
+                print('Cookies are available, running another search with soup')
+                page = requests.get('https://www.youtube.com/results?search_query=' + values['search_field'].replace(' ', '+'))
+                soup = BeautifulSoup(page.content, 'html.parser')
+                soup = soup.find_all('script')
+
+                # Grab the video id from the search page
+                text = str(soup)  # Convert tag object in string, result 26 in tag object contains the video id
+                video_id = text.find('watch?') # Finding the first video result
+                video_id = text[video_id + 8:video_id + 19]
+                print('https://www.youtube.com/watch?v=' + video_id)
+
+                # Run normal youtubedl url extractor, this one supports cookies
+                ydl = youtube_dl.YoutubeDL({'outtmpl': '%(id)s.%(ext)s', 'cookiefile': 'cookies.txt'})
+                info = ydl.extract_info('https://www.youtube.com/watch?v=' + video_id, download=False)
             else:
-                print("No video found")
-                return
-
-        # This error should occur when video is not found or accessible, for example error 429
-        except youtube_dl.utils.DownloadError:
-            try:
-                # If user has cookies file, run another search with beautiful soup, this can workaround the 429 error
-                if os.path.exists('cookies.txt'):
-                    print('Cookies are available, running another search with soup')
-                    page = requests.get('https://www.youtube.com/results?search_query=' + values['search_field'].replace(' ', '+'))
-                    soup = BeautifulSoup(page.content, 'html.parser')
-                    soup = soup.find_all('script')
-
-                    # Grab the video id from the search page
-                    text = str(soup)  # Convert tag object in string, result 26 in tag object contains the video id
-                    video_id = text.find('watch?') # Finding the first video result
-                    video_id = text[video_id + 8:video_id + 19]
-                    print('https://www.youtube.com/watch?v=' + video_id)
-
-                    # Run normal youtubedl url extractor, this one supports cookies
-                    ydl = youtube_dl.YoutubeDL({'outtmpl': '%(id)s.%(ext)s', 'cookiefile': 'cookies.txt'})
-                    info = ydl.extract_info('https://www.youtube.com/watch?v=' + video_id, download=False)
-                else:
-                    print('No video found or unable to download video!')
-                    sg.popup('No video found or unable to download video\n')
-                    return False
-
-            except youtube_dl.utils.DownloadError:
                 print('No video found or unable to download video!')
                 sg.popup('No video found or unable to download video\n')
                 return False
 
-        # Print out the extracted video information for debug purposes
-        print(info)
-        print(info['title'])
-        print(info['uploader'])
-        # print(info['description'])
-        print(info['duration'])  # Printed in seconds, convert this
-        print(info['webpage_url'])
-        print(info['thumbnail'])
+        except youtube_dl.utils.DownloadError:
+            print('No video found or unable to download video!')
+            sg.popup('No video found or unable to download video\n')
+            return False
 
-        # Convert duration into mm:ss
-        # Youtube seems to be off by a second from youtubedl, good enough I guess
-        video_duration = str(int(info['duration'] / 60))
-        video_duration = video_duration + ':' + str(info['duration'] % 60).zfill(2)
+    # Print out the extracted video information for debug purposes
+    print(info)
+    print(info['title'])
+    print(info['uploader'])
+    # print(info['description'])
+    print(info['duration'])  # Printed in seconds, convert this
+    print(info['webpage_url'])
+    print(info['thumbnail'])
 
-        # Shorten webpage url
-        webpage_url = info['webpage_url'][info['webpage_url'].find('/watch'):-1]
+    # Convert duration into mm:ss
+    # Youtube seems to be off by a second from youtubedl, good enough I guess
+    video_duration = str(int(info['duration'] / 60))
+    video_duration = video_duration + ':' + str(info['duration'] % 60).zfill(2)
 
-        urllib.request.urlretrieve(info['thumbnail'], 'thumbnail.png')
-        img = PIL.Image.open('thumbnail.png')
-        img = img.resize((360, 200))
-        img.save('thumbnail.png')
-        window['thumbnail'].update('thumbnail.png')
-        window['video_name'].update(info['title'])
-        window['video_duration'].update(video_duration)
-        window.Refresh()
+    # Shorten webpage url
+    webpage_url = info['webpage_url'][info['webpage_url'].find('/watch'):-1]
 
-        #  Build video.json, "loop":false fixed in a hacky way :D, limited description to 106 characters
-        #  Unsupported symbols in Windows cause issues, running function to clean those up
-        video_path = replace_symbols(info['title'])
+    urllib.request.urlretrieve(info['thumbnail'], 'thumbnail.png')
+    img = PIL.Image.open('thumbnail.png')
+    img = img.resize((360, 200))
+    img.save('thumbnail.png')
+    window['thumbnail'].update('thumbnail.png')
+    window['video_name'].update(info['title'])
+    window['video_duration'].update(video_duration)
+    window.Refresh()
 
-        # Remove everything from thumbnail url starting from ? symbol
-        thumbnail_url = info['thumbnail']
-        if thumbnail_url.find('?') != -1:
-            thumbnail_url = thumbnail_url[0:thumbnail_url.find('?')]
-            print(thumbnail_url)
+    #  Build video.json, "loop":false fixed in a hacky way :D, limited description to 106 characters
+    #  Unsupported symbols in Windows cause issues, running function to clean those up
+    video_path = replace_symbols(info['title'])
 
-        # Dataset for video.json
-        data_set = {'activeVideo': 0, 'videos': [
-            {'title': info['title'], 'author': info['uploader'],
-             'description': info['description'][0:106] + ' ...',
-             'duration': video_duration, 'URL': webpage_url, 'thumbnailURL': thumbnail_url,
-             'loop': 'f' + 'alse', 'offset': 0, 'videoPath': video_path + '.mp4'}], 'Count': 1}
+    # Remove everything from thumbnail url starting from ? symbol
+    thumbnail_url = info['thumbnail']
+    if thumbnail_url.find('?') != -1:
+        thumbnail_url = thumbnail_url[0:thumbnail_url.find('?')]
+        print(thumbnail_url)
 
-        # video.json debug
-        print(json.dumps(data_set, ensure_ascii=False))
+    # Dataset for video.json
+    data_set = {'activeVideo': 0, 'videos': [
+        {'title': info['title'], 'author': info['uploader'],
+         'description': info['description'][0:106] + ' ...',
+         'duration': video_duration, 'URL': webpage_url, 'thumbnailURL': thumbnail_url,
+         'loop': 'f' + 'alse', 'offset': 0, 'videoPath': video_path + '.mp4'}], 'Count': 1}
 
-        window['Download'].update(disabled=False)
+    # video.json debug
+    print(json.dumps(data_set, ensure_ascii=False))
 
-        # TODO Fix file size grab and add resolution information
-        # print(info)
-        # video_size = int(info['formats'][0]['filesize']) #/ 1000000
-        # window['video_size'].update('{:.2f}{}'.format(video_size, ' MB'), visible=True)
-        window.Refresh()
+    window['Download'].update(disabled=False)
 
-        return True
+    # TODO Fix file size grab and add resolution information
+    # print(info)
+    # video_size = int(info['formats'][0]['filesize']) #/ 1000000
+    # window['video_size'].update('{:.2f}{}'.format(video_size, ' MB'), visible=True)
+    window.Refresh()
+
+    return True
 
 
 #  Download the video, when download button is pressed
-def download_video(track_fullPath):
+def download_video(track_fullPath) -> bool:
     event, values = window.read(timeout=0)
     av = data_set['activeVideo']
 
     if not values['tracklist']:
         print('No track selected!')
-    elif not info:
+        return False
+
+    if not info:
         print('No video selected!')
-    else:
-        # Delete previous video
-        try:
-            if video_exists:
-                os.remove(track_fullPath + '/' + data_set['videos'][av]["videoPath"])
-        except FileNotFoundError:
-            print('Could not delete previous video.')
-            sg.popup('Could not delete previous video.\nPlease delete it manually from the folder.')
+        return False
 
-        download = info['webpage_url']
-        print(download)
-        #  Display warning, if video is 1.5 times longer than the bs track
-        #  TODO Add a confirmation window here
-        #  If info.dat is missing, the limit is 900 seconds
-        if info['duration'] > track_seconds * 1.5:
-            print('Video is way longer than the track!')
-            window['video_size'].update('Video is way longer than the track.', visible=True)
-            window.Refresh()
-            return False
-        else:
-            # Save video.json, encoding in utf8, otherwise there will be problems with MVP
-            with open(track_fullPath + '/video.json', 'w', encoding='utf8') as outfile:
-                json.dump(data_set, outfile, ensure_ascii=False)
-            # Download the video
-            # TODO See if there is a way to overwrite previous video
-            try:
-                youtube_dl.YoutubeDL({'format': 'mp4[height>=480][height<1080]+bestaudio[ext=m4a]',
-                                      'cookiefile':'cookies.txt',
-                                      'outtmpl': track_fullPath + '/%(title)s.%(ext)s'}).download(
-                    [download])  # Outputs title + extension
-            except youtube_dl.utils.DownloadError:
-                print('Unable to download video format, lowering requirements.')
-                youtube_dl.YoutubeDL({'format': 'mp4[height<=720]+bestaudio[ext=m4a]',
-                                      'outtmpl': track_fullPath + '/%(title)s.%(ext)s'}).download(
-                    [download])
-            try:
-                av = data_set['activeVideo']
+    # Delete previous video
+    try:
+        if video_exists and os.path.isfile(track_fullPath + '/' + data_set['videos'][av]['videoPath']):
+            os.remove(track_fullPath + '/' + data_set['videos'][av]["videoPath"])
+    except IOError:
+        print('Could not delete previous video.')
+        sg.popup('Could not delete previous video.\nPlease delete it manually from the folder.')
 
-                #video_path = data_set['videos'][av]['videoPath']
+    download = info['webpage_url']
+    print(download)
+    #  Display warning, if video is 1.5 times longer than the bs track
+    #  TODO Add a confirmation window here
+    #  If info.dat is missing, the limit is 900 seconds
+    if info['duration'] > track_seconds * 1.5:
+        print('Video is way longer than the track!')
+        window['video_size'].update('Video is way longer than the track.', visible=True)
+        window.Refresh()
+        return False
 
-                # Patchwork fix for bad symbols in filenames
-                # The symbol replacement function is not enough in itself
-                files = os.listdir(track_fullPath + '/')
-                for filename in files:
-                    if not filename.endswith('.mp4'):
-                        continue
-                    with open(track_fullPath + '/video.json', 'r', encoding='UTF-8') as f:
-                        trackData = json.load(f)
-                    if trackData['videos'][av]['videoPath'] != filename:
-                        trackData['videos'][av]['videoPath'] = filename
-                    with open(track_fullPath + '/video.json', 'w', encoding='UTF-8') as f:
-                        json.dump(trackData, f)
+    # Save video.json, encoding in utf8, otherwise there will be problems with MVP
+    with open(track_fullPath + '/video.json', 'w', encoding='utf8') as outfile:
+        json.dump(data_set, outfile, ensure_ascii=False)
+    # Download the video
+    # TODO See if there is a way to overwrite previous video
+    try:
+        youtube_dl.YoutubeDL({'format': 'mp4[height>=480][height<1080]+bestaudio[ext=m4a]',
+                              'cookiefile':'cookies.txt',
+                              'outtmpl': track_fullPath + '/%(title)s.%(ext)s'}).download(
+            [download])  # Outputs title + extension
+    except youtube_dl.utils.DownloadError:
+        print('Unable to download video format, lowering requirements.')
+        youtube_dl.YoutubeDL({'format': 'mp4[height<=720]+bestaudio[ext=m4a]',
+                              'outtmpl': track_fullPath + '/%(title)s.%(ext)s'}).download(
+            [download])
+    try:
+        av = data_set['activeVideo']
 
-                video_size = os.stat(track_fullPath + '/' + trackData['videos'][av]['videoPath']).st_size / 1000000
+        #video_path = data_set['videos'][av]['videoPath']
 
-                cv2video = cv2.VideoCapture(track_fullPath + '/' + trackData['videos'][av]['videoPath'])
-                video_height = cv2video.get(cv2.CAP_PROP_FRAME_HEIGHT)
-                cv2.VideoCapture.release(cv2video)
+        # Patchwork fix for bad symbols in filenames
+        # The symbol replacement function is not enough in itself
+        files = os.listdir(track_fullPath + '/')
+        for filename in files:
+            if not filename.endswith('.mp4'):
+                continue
+            with open(track_fullPath + '/video.json', 'r', encoding='UTF-8') as f:
+                trackData = json.load(f)
+            if trackData['videos'][av]['videoPath'] != filename:
+                trackData['videos'][av]['videoPath'] = filename
+            with open(track_fullPath + '/video.json', 'w', encoding='UTF-8') as f:
+                json.dump(trackData, f)
 
-                window['video_size'].update(
-                    '{}{:.2f}{}{:.0f}p'.format('Video downloaded - ', video_size, ' MB - ', video_height),
-                    visible=True)
-                window['Auto Offset'].update(disabled=False)
-                window['offset'].update('{}{}'.format('Offset: ', data_set['videos'][0]['offset']),
-                                        visible=True)
-                return True
+        video_size = os.stat(track_fullPath + '/' + trackData['videos'][av]['videoPath']).st_size / 1000000
 
-            except OSError:
-                print('Could not grab video file size, probably because of a weird symbol in filename')
-                window['video_size'].update('Video downloaded - File size not available', visible=True)
-                return True
+        cv2video = cv2.VideoCapture(track_fullPath + '/' + trackData['videos'][av]['videoPath'])
+        video_height = cv2video.get(cv2.CAP_PROP_FRAME_HEIGHT)
+        cv2.VideoCapture.release(cv2video)
+
+        window['video_size'].update(
+            '{}{:.2f}{}{:.0f}p'.format('Video downloaded - ', video_size, ' MB - ', video_height),
+            visible=True)
+        window['Auto Offset'].update(disabled=False)
+        window['offset'].update('{}{}'.format('Offset: ', data_set['videos'][0]['offset']),
+                                visible=True)
+        return True
+
+    except OSError:
+        print('Could not grab video file size, probably because of a weird symbol in filename')
+        window['video_size'].update('Video downloaded - File size not available', visible=True)
+        return True
 
 
 # Calculate audio/video offset using MVP's tools or librosa
