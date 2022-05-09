@@ -162,41 +162,41 @@ def replace_symbols(filename):
 
 
 # Fetches and updates video.json to the newest format
-def fetch_video_json(track_fullPath):
+def fetch_video_json(track_fullPath) -> bool:
 
-    if os.path.isfile(track_fullPath + '/video.json'):
-        with open(track_fullPath + '/video.json', 'r+', encoding='utf8') as f:
-            try:
-                video_json = json.load(f)
-                # Check if the json is in the new format, if not convert it
-                # Currently only the active video in the json file is grabbed
-                if 'videos' not in video_json:
-                    video_json = {'activeVideo': 0, 'videos': [video_json]}
-
-                av = video_json['activeVideo']  # Grab only the active video
-
-                # Fix lowercase key
-                if 'videopath' in video_json['videos'][av]:
-                    video_json['videos'][av]['videoPath'] = video_json['videos'][av]['videopath']
-                    del video_json['videos'][av]['videopath']
-
-                # Clean unsupported symbols from from videoPath
-                video_json['videos'][av]['videoPath'] = replace_symbols(video_json['videos'][av]['videoPath'])
-
-                # Save video.json with the changes
-                f.seek(0)  # Return to the beginning of the file
-                json.dump(video_json, f, ensure_ascii=False)
-                f.truncate()  # Clean old data from file
-
-                return video_json
-
-            #  Skip printing video info, if video.json is in weird format or empty
-            except json.decoder.JSONDecodeError:
-                print('video.json empty or not in proper format!')
-                window['video_name'].update('video.json empty or not in proper format!')
-                return False
-    else:
+    if not os.path.isfile(track_fullPath + '/video.json'):
         return False
+
+    with open(track_fullPath + '/video.json', 'r+', encoding='utf8') as f:
+        try:
+            video_json = json.load(f)
+            # Check if the json is in the new format, if not convert it
+            # Currently only the active video in the json file is grabbed
+            if 'videos' not in video_json:
+                video_json = {'activeVideo': 0, 'videos': [video_json]}
+
+            av = video_json['activeVideo']  # Grab only the active video
+
+            # Fix lowercase key
+            if 'videopath' in video_json['videos'][av]:
+                video_json['videos'][av]['videoPath'] = video_json['videos'][av]['videopath']
+                del video_json['videos'][av]['videopath']
+
+            # Clean unsupported symbols from from videoPath
+            video_json['videos'][av]['videoPath'] = replace_symbols(video_json['videos'][av]['videoPath'])
+
+            # Save video.json with the changes
+            f.seek(0)  # Return to the beginning of the file
+            json.dump(video_json, f, ensure_ascii=False)
+            f.truncate()  # Clean old data from file
+
+            return video_json
+
+        #  Skip printing video info, if video.json is in weird format or empty
+        except json.decoder.JSONDecodeError:
+            print('video.json empty or not in proper format!')
+            window['video_name'].update('video.json empty or not in proper format!')
+            return False
 
 
 # Updates track information when a track is selected from the list
@@ -209,105 +209,106 @@ def select_track():
     clear_info('')
     if not values['tracklist']:
         print('No tracks!')
-    else:
-        selectedTrack = str(values['tracklist'])
-        track_path = current_track_fullpath()
+        return
+
+    selectedTrack = str(values['tracklist'])
+    track_path = current_track_fullpath()
+    try:
+        with open(track_path + '/info.dat', encoding='utf8') as f:
+            info_dat = True
+            track_json = json.load(f)
+            img = PIL.Image.open(track_path + '/' + track_json['_coverImageFilename'])
+            img.thumbnail((200, 200))
+            img.save('cover.png')
+            f.close()
+        tag = TinyTag.get(track_path + '/' + track_json['_songFilename'])
+        track_seconds = tag.duration  # Variable to check video length vs track length
+
+        # Convert duration into m:ss
+        track_duration = str(int(tag.duration / 60))
+        track_duration = track_duration + ':' + str(int(tag.duration % 60)).zfill(2)
+
+        # Update track fields
+        window['cover_image'].update('cover.png')
+        window['track_name_and_author'].update(
+            track_json['_songName'] + ' - ' + track_json['_levelAuthorName'])
+        # window['track_author'].update(track_json['_levelAuthorName'])
+        window['track_duration'].update(track_duration)
+
+    #  Reset fields and set duration to 600 seconds, if info.dat is not found
+    except FileNotFoundError:
+        info_dat = False
+        print('Missing info.dat or cover image!')
+        track_seconds = 600
+        window['track_name_and_author'].update('info.dat or cover image missing!')
+        # clear_info(['cover_image', 'track_duration'])
+
+    #  Reset fields and set duration to 600 seconds, if info.dat is in weird format or empty
+    except json.decoder.JSONDecodeError:
+        info_dat = False
+        print('info.dat empty or not in proper format!')
+        track_seconds = 600
+        window['track_name_and_author'].update('info.dat empty or not in proper format!')
+        # clear_info(['cover_image', 'track_duration'])
+
+    # Grab video info
+    video_json = fetch_video_json(track_path)
+    if video_json is not False:
+        av = video_json['activeVideo']  # Grab only the active video
+
+        print(video_json['videos'][av]['title'])
+        print(video_json['videos'][av]['duration'])
+        print(video_json['videos'][av]['thumbnailURL'])
+
+        # Find video thumbnail
         try:
-            with open(track_path + '/info.dat', encoding='utf8') as f:
-                info_dat = True
-                track_json = json.load(f)
-                img = PIL.Image.open(track_path + '/' + track_json['_coverImageFilename'])
-                img.thumbnail((200, 200))
-                img.save('cover.png')
-                f.close()
-            tag = TinyTag.get(track_path + '/' + track_json['_songFilename'])
-            track_seconds = tag.duration  # Variable to check video length vs track length
+            urllib.request.urlretrieve(video_json['videos'][av]['thumbnailURL'], 'thumbnail.png')
+        except urllib.error.HTTPError:
+            urllib.request.urlretrieve('https://s.ytimg.com/yts/img/no_thumbnail-vfl4t3-4R.jpg', 'thumbnail.png')
+        img = PIL.Image.open('thumbnail.png')
+        img.thumbnail((360, 200))
+        img.save('thumbnail.png')
 
-            # Convert duration into m:ss
-            track_duration = str(int(tag.duration / 60))
-            track_duration = track_duration + ':' + str(int(tag.duration % 60)).zfill(2)
+        # Update fields
+        window['video_name'].update(video_json['videos'][av]['title'])
+        window['video_duration'].update(video_json['videos'][av]['duration'].replace('.', ':'))
+        window['thumbnail'].update('thumbnail.png')
+        window['offset'].update('{}{}'.format('Offset: ', video_json['videos'][av]['offset']), visible=True)
+        window['Auto Offset'].update(disabled=False)
 
-            # Update track fields
-            window['cover_image'].update('cover.png')
-            window['track_name_and_author'].update(
-                track_json['_songName'] + ' - ' + track_json['_levelAuthorName'])
-            # window['track_author'].update(track_json['_levelAuthorName'])
-            window['track_duration'].update(track_duration)
+        # Find video in folder and print info
+        try:
+            video_path = video_json['videos'][av]['videoPath']
+            video_size = os.stat(track_path + '/' + video_path).st_size / 1000000
 
-        #  Reset fields and set duration to 600 seconds, if info.dat is not found
+            # Grab video height
+            # TODO This doesn't work on some videos, results show up as 0p
+            cv2video = cv2.VideoCapture(track_path + '/' + video_path)
+            video_height = cv2video.get(cv2.CAP_PROP_FRAME_HEIGHT)
+            cv2.VideoCapture.release(cv2video)
+
+            video_exists = True
+
+            window['video_size'].update(
+                '{}{:.2f}{}{:.0f}p'.format('Video downloaded - ', video_size, ' MB - ', video_height), visible=True)
+
         except FileNotFoundError:
-            info_dat = False
-            print('Missing info.dat or cover image!')
-            track_seconds = 600
-            window['track_name_and_author'].update('info.dat or cover image missing!')
-            # clear_info(['cover_image', 'track_duration'])
-
-        #  Reset fields and set duration to 600 seconds, if info.dat is in weird format or empty
-        except json.decoder.JSONDecodeError:
-            info_dat = False
-            print('info.dat empty or not in proper format!')
-            track_seconds = 600
-            window['track_name_and_author'].update('info.dat empty or not in proper format!')
-            # clear_info(['cover_image', 'track_duration'])
-
-        # Grab video info
-        video_json = fetch_video_json(track_path)
-        if video_json is not False:
-            av = video_json['activeVideo']  # Grab only the active video
-
-            print(video_json['videos'][av]['title'])
-            print(video_json['videos'][av]['duration'])
-            print(video_json['videos'][av]['thumbnailURL'])
-
-            # Find video thumbnail
-            try:
-                urllib.request.urlretrieve(video_json['videos'][av]['thumbnailURL'], 'thumbnail.png')
-            except urllib.error.HTTPError:
-                urllib.request.urlretrieve('https://s.ytimg.com/yts/img/no_thumbnail-vfl4t3-4R.jpg', 'thumbnail.png')
-            img = PIL.Image.open('thumbnail.png')
-            img.thumbnail((360, 200))
-            img.save('thumbnail.png')
-
-            # Update fields
-            window['video_name'].update(video_json['videos'][av]['title'])
-            window['video_duration'].update(video_json['videos'][av]['duration'].replace('.', ':'))
-            window['thumbnail'].update('thumbnail.png')
-            window['offset'].update('{}{}'.format('Offset: ', video_json['videos'][av]['offset']), visible=True)
-            window['Auto Offset'].update(disabled=False)
-
-            # Find video in folder and print info
-            try:
-                video_path = video_json['videos'][av]['videoPath']
-                video_size = os.stat(track_path + '/' + video_path).st_size / 1000000
-
-                # Grab video height
-                # TODO This doesn't work on some videos, results show up as 0p
-                cv2video = cv2.VideoCapture(track_path + '/' + video_path)
-                video_height = cv2video.get(cv2.CAP_PROP_FRAME_HEIGHT)
-                cv2.VideoCapture.release(cv2video)
-
-                video_exists = True
-
-                window['video_size'].update(
-                    '{}{:.2f}{}{:.0f}p'.format('Video downloaded - ', video_size, ' MB - ', video_height), visible=True)
-
-            except FileNotFoundError:
-                print('Video not found!')
-                video_exists = False
-                window['video_size'].update('Video file not found in folder', visible=True)
-        else:
+            print('Video not found!')
             video_exists = False
+            window['video_size'].update('Video file not found in folder', visible=True)
+    else:
+        video_exists = False
 
-        # If track contains proper info.dat, display track name and author on the search field
-        if info_dat:
-            selectedTrack = track_json['_songName'] + ' ' + track_json['_songAuthorName']
-        # Otherwise cut the excess text from the folder name, based on ( and - symbols. Display on search field
-        else:
-            selectedTrack = selectedTrack[selectedTrack.find('(') + 1:selectedTrack.rfind('-') - 1]
-        window['search_field'].update(selectedTrack)
+    # If track contains proper info.dat, display track name and author on the search field
+    if info_dat:
+        selectedTrack = track_json['_songName'] + ' ' + track_json['_songAuthorName']
+    # Otherwise cut the excess text from the folder name, based on ( and - symbols. Display on search field
+    else:
+        selectedTrack = selectedTrack[selectedTrack.find('(') + 1:selectedTrack.rfind('-') - 1]
+    window['search_field'].update(selectedTrack)
 
-        window['Download'].update(disabled=True)
-        window.Refresh()
+    window['Download'].update(disabled=True)
+    window.Refresh()
 
 
 # Run search with the search term, only grabs the 1st result
@@ -370,6 +371,9 @@ def search_youtube() -> bool:
             sg.popup('No video found or unable to download video\n')
             return False
 
+    except ConnectionResetError:
+        return False
+
     # Print out the extracted video information for debug purposes
     print(info)
     print(info['title'])
@@ -387,7 +391,11 @@ def search_youtube() -> bool:
     # Shorten webpage url
     webpage_url = info['webpage_url'][info['webpage_url'].find('/watch'):-1]
 
-    urllib.request.urlretrieve(info['thumbnail'], 'thumbnail.png')
+    try:
+        urllib.request.urlretrieve(info['thumbnail'], 'thumbnail.png')
+    except ConnectionResetError:
+        return False
+
     img = PIL.Image.open('thumbnail.png')
     img = img.resize((360, 200))
     img.save('thumbnail.png')
@@ -461,7 +469,7 @@ def download_video(track_fullPath) -> bool:
 
     # Save video.json, encoding in utf8, otherwise there will be problems with MVP
     with open(track_fullPath + '/video.json', 'w', encoding='utf8') as outfile:
-        json.dump(data_set, outfile, ensure_ascii=False)
+        json.dump(data_set, outfile, ensure_ascii=False, indent=4)
     # Download the video
     # TODO See if there is a way to overwrite previous video
     try:
@@ -616,8 +624,13 @@ def run_auto_offset(offsetMethod: int, trackFullPath: str):
 
 def current_track_fullpath() -> str:
     event, values = window.read(timeout=0)
-    search = str(values['tracklist'])  # Chosen track
-    return values['bs_folder'] + '/' + search.replace('[\'', '').replace('\']', '').replace('"]', '').replace('["', '')
+
+    trackName = str(values['tracklist']) # Chosen track
+
+    if not trackName:
+        return ''
+
+    return values['bs_folder'] + '/' + trackName.replace('[\'', '').replace('\']', '').replace('"]', '').replace('["', '')
 
 
 # GUI loop
@@ -739,6 +752,8 @@ def create_GUI():
                 filter_list = tracksWithNoVideo
             elif values['track_filter'] == 'Tracks with video':
                 filter_list = tracksWithVideo
+            else:
+                filter_list = allTracks
 
             if len(values['filter']) < 2:
                 window['tracklist'].update(filter_list)
