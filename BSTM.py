@@ -265,14 +265,26 @@ def select_track():
             urllib.request.urlretrieve(video_json['videos'][av]['thumbnailURL'], 'thumbnail.png')
         except urllib.error.HTTPError:
             urllib.request.urlretrieve('https://s.ytimg.com/yts/img/no_thumbnail-vfl4t3-4R.jpg', 'thumbnail.png')
-        img = PIL.Image.open('thumbnail.png')
-        img.thumbnail((360, 200))
-        img.save('thumbnail.png')
+        except ConnectionResetError:
+            print('Could not load thumbnail')
+
+        thumbnailLoaded = False
+
+        try:
+            img = PIL.Image.open('thumbnail.png')
+            img.thumbnail((360, 200))
+            img.save('thumbnail.png')
+            thumbnailLoaded = True
+        except (RuntimeError, OSError):
+            print('Could not load thumbnail')
 
         # Update fields
         window['video_name'].update(video_json['videos'][av]['title'])
         window['video_duration'].update(video_json['videos'][av]['duration'].replace('.', ':'))
-        window['thumbnail'].update('thumbnail.png')
+
+        if thumbnailLoaded:
+            window['thumbnail'].update('thumbnail.png')
+
         window['offset'].update('{}{}'.format('Offset: ', video_json['videos'][av]['offset']), visible=True)
         window['Auto Offset'].update(disabled=False)
 
@@ -404,7 +416,7 @@ def search_youtube() -> bool:
     window['video_duration'].update(video_duration)
     window.Refresh()
 
-    #  Build video.json, "loop":false fixed in a hacky way :D, limited description to 106 characters
+    #  Build video.json, "loop":false fixed in a hacky way- :D, limited description to 106 characters
     #  Unsupported symbols in Windows cause issues, running function to clean those up
     video_path = replace_symbols(info['title'])
 
